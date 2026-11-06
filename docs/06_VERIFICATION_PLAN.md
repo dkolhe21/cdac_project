@@ -1,5 +1,8 @@
 # 06 — Verification Plan & Methodology
 
+> **Document Purpose**: Formal verification and functional validation plan detailing the 42-assertion SVA suite, bounded model checking depths, transaction-level reference models, and exit criteria.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — direct test objectives, quantifiable pass/fail criteria, and structured technical specifications.
+
 ## 1. Scope & Objective
 Three-layer verification methodology guaranteeing cache coherence, protocol safety, deadlock freedom, and cycle-accurate functional correctness.
 
@@ -50,5 +53,5 @@ Smoke test: 4-bit ALU (add/sub/pass), single cocotb test asserting (2+3)==5 → 
 | Scaffold | Tests | Status |
 |---|---|---|
 | tb/smoke | ALU + DFF (async reset) | PASS (positive + 2 negative controls) |
-| tb/l1_dir | F1 (forward release) | Scaffold only — positive FAILS against stub; 2 negative controls PASS |
+| tb/l1_dir | F1 (forward release) | Scaffold only — positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL. Discrimination proven by mutation test (3 stub mutations A/B/C, 9/9 expected outcomes) |
 

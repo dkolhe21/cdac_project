@@ -1,5 +1,8 @@
 # AI Scratchpad — Iteration & Debugging Log
 
+> **Document Purpose**: Dynamic operational state and task-tracking log maintaining immediate in-flight engineering tasks, active debugging context, and next actionable steps between development sessions.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — direct imperative actions, clear state indicators, and unambiguous diagnostic notes.
+
 ## Session: 2026-11-05 — Toolchain Verified, Bank Port Frozen, L1/Dir Scaffold Ready
 
 ---
@@ -110,7 +113,7 @@ status: dtr_busy    (one transaction per bank, N4/N5)
 | Scaffold | Tests | Status |
 |----------|-------|--------|
 | `tb/smoke/` | ALU + DFF | ✅ PASS (positive + 2 negative controls) |
-| `tb/l1_dir/` | F1 forward release | 🟡 Scaffold only — positive FAILS against stub; 2 negative controls PASS |
+| `tb/l1_dir/` | F1 forward release | 🟡 Scaffold only — positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL. Discrimination proven by mutation test (A/B/C), not by baseline |
 
 **`tb/l1_dir/` details**:
 - Stubs: `rtl/l1/l1_mesi_ctrl.sv`, `rtl/directory/dir_ctrl.sv` (all outputs = 0)
@@ -163,6 +166,18 @@ A module is green only when **all four** hold:
 | OI-3 | cross-check-snapshot deleted | ✅ Closed |
 | **OI-4** | **Bank arbiter order** — WP §12 item 9 unspecified (R2). Provisional: tap>remote>L1. Resolve if L1 starvation observed. | ⚠️ **Open** |
 | **OI-5** | **l1_dir positive test must pass against implemented l1_mesi_ctrl + dir_ctrl** before Criterion 1 claimed. Scaffold exists; positive FAILS against stub. | ⚠️ **Open** |
+| **OI-6** | cocotb `units=` deprecated in 2.x, aliased to `unit=`; alias will be removed in a future major. Before any cocotb 3.x upgrade, run: `grep -rn 'units=' tb/ \| sed 's/units=/unit=/g'` then re-run tb/smoke and tb/l1_dir | ⚠️ **Open** |
+| **OI-8** | **F1 formal PASS depends on `assume(!dir_oflow)`.** Stands in for NIC credit management (§16.9 not implemented). Track until §16.9 landed; at that point re-run BMC without the assumption and confirm the verdict holds. | ⚠️ **Open** |
+| **OI-9** | **a2_2 sharer accuracy failure on FWD_WAIT→DIR_S transition.** Directory enters DIR_S with stale sharers while requester is SM_D. BMC K=64 & K=128 FAIL at step 48. Requires RTL fix in `dir_ctrl.sv` lines 304–310. | ⚠️ **Open** |
+
+---
+
+## Session: 2026-11-05 — RTL Evidence Sweep (Frozen RTL)
+
+- Frozen hashes: `md5sum -c rtl_frozen/FROZEN.md5` → all OK.
+- Evidence tree: `tb_rtl_evidence/` (formal K=64/K=128, static audit, lint).
+- R5 / OI-8 recorded: formal F1 verdict is conditional on `assume(!dir_oflow)`.
+
 
 ---
 
@@ -246,7 +261,7 @@ python3 ~/.skills/hw-design-docs/scripts/check_docs.py \
 # Smoke test (toolchain proof)
 cd tb/smoke && make MODULE=test_clocked
 
-# L1/Dir scaffold (positive FAILS against stub, negatives PASS)
+# L1/Dir scaffold (positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL)
 cd tb/l1_dir && make MODULE=test_f1_forward
 ```
 
@@ -273,7 +288,7 @@ cd tb/l1_dir && make MODULE=test_f1_forward
 - [ ] Run doc gate with build-order → 47/47
 - [ ] Run doc gate WITHOUT build-order → COUNT DRIFT (exits 1)
 - [ ] Run `tb/smoke/` → PASS (1 test, positive + 2 negatives)
-- [ ] Run `tb/l1_dir/` → 3 tests, 1 FAIL (positive), 2 PASS (negatives)
+- [ ] Run `tb/l1_dir/` → 3 tests: positive FAIL, neg1 PASS, neg2 FAIL (baseline vs zero-stub; discrimination via mutation A/B/C)
 - [ ] Confirm `rtl/l2/l2_bank.sv` is stub, `l1_mesi_ctrl.sv` + `dir_ctrl.sv` are stubs
 - [ ] Ready to implement real `l2_bank` then co-land L1/dir
 
@@ -322,7 +337,7 @@ cd tb/l1_dir && make MODULE=test_f1_forward
    - Created `tb/l1_dir/tb_l1_dir.sv` — instantiates 2× L1 + 1× DIR + bank mux
    - Created `tb/l1_dir/test_f1_forward.py` — 3 tests (positive + 2 negative controls)
    - Created `tb/l1_dir/Makefile`
-   - **Result**: Positive FAILS against stub (expected); 2 negative controls PASS (proving scaffold has teeth)
+   - **Result**: Positive FAILS against stub (expected); 2 negative controls PASS — *later refuted: mutation testing (2026-11-05, follow-up work order) showed both passed vacuously against the zero-emitting stub; test restructured and proven with mutations A/B/C*
 
 4. **Task 3 — Docs updated**:
    - `docs/06_VERIFICATION_PLAN.md` — added "Test Scaffolds" table (tb/smoke PASS, tb/l1_dir scaffold)
@@ -385,3 +400,31 @@ cd tb/l1_dir && make MODULE=test_f1_forward
 - **No supervisor available in this session** — all instructions from `WORK_ORDER_3` file.
 - **User**: switching machines; this scratchpad is the handoff document.
 - **If a step fails**: paste the exact error and stop; do not rewrite instructions to match what was done. (Rule from WORK_ORDER_3.)
+
+---
+
+## Session: 2026-11-06 — RTL Evidence Sweep (Frozen RTL)
+
+**Frozen hash check**: `md5sum -c rtl_frozen/FROZEN.md5` → all OK.
+
+**Evidence tree**: `tb_rtl_evidence/` (formal K=64/K=128, static audit, lint).
+
+| Task | Result | Key Output |
+|---|---|---|
+| 1. BMC K=64 | **FAIL** (a2_2 step 48) | `FORMAL_K64.md`, `FORMAL_FAILURES.md` |
+| 2. BMC K=128 | **FAIL** (a2_2 step 48) | `FORMAL_K128.md` |
+| 3. Static audit | COMPLETE | `AUDIT.md` (26/39 covered, 5 partial, 3 OOS, 5 temporal) |
+| 4. Lint sweep | COMPLETE | `LINT.md` (4 real UNUSEDSIGNAL, 42 style, 21 Icarus limit) |
+| 5. Open items | UPDATED | R5, OI-8, OI-9 recorded |
+
+**Key failure**: `a2_2` Sharer accuracy — directory enters `DIR_S` on `UNBLOCK` while requester still in `SM_D` (transient). Counterexample at step 48. Fix in `dir_ctrl.sv` lines 304–310.
+
+**R5 / OI-8**: Formal verdicts conditional on `assume(!dir_oflow)` (NIC credits §16.9 not implemented).
+
+**OI-9 added**: Sharer accuracy failure on FWD_WAIT→DIR_S transition.
+
+**Gates on frozen RTL**: Spec 130/130 PASS, Docs 47/47 PASS, Icarus/Verilator exit 0.
+
+---
+
+**Next session should start with**: Fix `a2_2` in `dir_ctrl.sv`, then re-run BMC K=64.

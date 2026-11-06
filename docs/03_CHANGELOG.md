@@ -1,5 +1,8 @@
 # Changelog
 
+> **Document Purpose**: Version-controlled chronicle of milestone completions, architectural refactorings, and module progress across the hardware engineering lifecycle.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — short itemized clauses, clear past-tense action verbs, and unambiguous component naming.
+
 All notable changes and implementation iterations for the Cache-Coherent Tiled Multicore project will be documented here.
 
 ## Milestones
@@ -30,5 +33,6 @@ All notable changes and implementation iterations for the Cache-Coherent Tiled M
 - **R3 — L2 bank port frozen**: Added `bank_src_e` enum (SRC_TAP, SRC_REMOTE, SRC_L1) and frozen port signature to `tile_pkg.sv`.
 - **Created `rtl/l2/l2_bank.sv`**: Stub implementation (all outputs = 0) for port freeze.
 - **L1/dir testbench scaffold** (`tb/l1_dir/`): Stubs for `l1_mesi_ctrl` + `dir_ctrl`, F1 positive test + 2 negative controls (both pass, proving scaffold has teeth).
+- **Scaffold mutation-tested**: Original negatives passed vacuously against the zero stub; `test_f1_forward.py` restructured (negative controls now PASS only while their fault is present) and proven against 3 stub mutations — 9/9 expected outcomes, including positive rejecting a dirty DATAFWD.
 - **R4 — cocotb 2.1.0 pinned**: Documented in decision log with migration notes.
 

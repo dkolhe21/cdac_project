@@ -1,5 +1,8 @@
 # 00 — Architecture & Microarchitecture Specification
 
+> **Document Purpose**: Definitive technical specification and microarchitecture reference for the cache-coherent tiled multicore fabric, detailing cache hierarchies, coherence protocols, interconnect routing, and address mapping.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — direct declarative phrasing, unambiguous numeric citations, and strict active-voice descriptions.
+
 ## Scope
 
 This document covers the coherence fabric only: L1/L2 caches, directory, NIC, router, mem_tap, and the

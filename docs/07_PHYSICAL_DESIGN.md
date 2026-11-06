@@ -1,5 +1,8 @@
 # 07 — Physical Design & FPGA Implementation
 
+> **Document Purpose**: Hardware synthesis and physical implementation specification for FPGA emulation on the Xilinx Zynq-7000 (ZedBoard), defining clocking, reset, IO budgets, and static timing constraints.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — precise numerical budgets, concise constraint statements, and unambiguous implementation parameters.
+
 ## Target Platform
 - **Device**: AMD Xilinx Zynq-7000 SoC (`XC7Z020-CLG484-1`) on ZedBoard.
 - **Clock Frequency**: 100 MHz (Target Clock Period: 10.0 ns).

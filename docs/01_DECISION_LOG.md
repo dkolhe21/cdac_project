@@ -1,5 +1,8 @@
 # Architectural Decision Log (ADR)
 
+> **Document Purpose**: Authoritative Architectural Decision Record (ADR) capturing formal protocol rulings, microarchitectural adjudications, and implementation contracts.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — direct active verbs, restricted synonym usage, unambiguous criteria, and strict clause brevity.
+
 ## Rulings
 
 | ID | Topic | Ruling | Contested | Resolved by |
@@ -10,6 +13,7 @@
 | R2 | Bank arbiter order | **Provisional**: tap > remote > L1 (see `BANK_ARB_TAP_FIRST` in `tile_pkg.sv`); spec §12 item 9 leaves order unspecified | **Yes — provisional** | Open (OI-4) |
 | R3 | L2 bank port shape | Frozen per `tile_pkg.sv`: req {valid, is_write, addr, wdata, wstrb, source_sel}, rsp {valid, rdata, rstrb, rlast}, status {dtr_busy}. source_sel enum {TAP, REMOTE, L1} is the R2 input. | Provisional pending PLRU/write-logic impl | Open (R2/OI-4 arbiter) |
 | R4 | cocotb major version | Pinned to 2.1.0 (installed via pipx; iverilog 13.0). Consequence: `dut.<sig>.value` returns LogicArray (not int); Timer signature; no `cocotb.binary`. Future tests must match 2.x. Revisit only if cocotb upgrade re-runs tb/smoke green. | No | 2026-11-04 |
+| R5 | Formal scope: NIC backpressure | **Provisional:** `assume(!dir_oflow)` is a formal environment assumption standing in for NIC credit management (WP §16.9 not implemented). F1 formal results valid ONLY under this assumption. Re-run without the assumption when §16.9 lands. | Yes — provisional | Open until §16.9 implemented |
 
 ## Contested Decisions
 

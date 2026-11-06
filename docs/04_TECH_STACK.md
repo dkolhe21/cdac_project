@@ -1,5 +1,8 @@
 # Tech Stack & Dependencies
 
+> **Document Purpose**: Authoritative inventory of development languages, synthesis toolchains, formal solvers, simulation engines, licenses, and version-pinning rationales for the project.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — concise tabular taxonomy, technical accuracy, and clear active descriptions.
+
 | Tool / Dependency | Version / Target | Purpose / Scope | License | Why Chosen |
 |---|---|---|---|---|
 | **SystemVerilog** | IEEE 1800-2017 | RTL implementation and assertions (SVA) | Open Standard | Synthesis & verification standard |

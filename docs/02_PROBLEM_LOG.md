@@ -1,5 +1,8 @@
 # Problem Log
 
+> **Document Purpose**: Systematic post-mortem ledger recording every hardware defect, reproduction method, root cause analysis, resolution patch, verification proof, and engineering lesson learned.  
+> **Writing Standard**: Formatted with explicit adherence to ~80% ASD-STE100 (Simplified Technical English) language standards — structured 6-field chain, direct causal analysis, and unambiguous technical vocabulary.
+
 Format: Symptom → Reproduction → Root cause → Resolution → Verification → Lesson
 
 ## P-001: L1_TAG_W computed as 26 b instead of 24 b
