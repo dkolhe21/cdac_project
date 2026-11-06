@@ -311,11 +311,7 @@ module dir_ctrl import tile_pkg::*; (
             state_d   = DIR_M;
           end else begin
             owner_d   = '0;
-            // Conservative: only the old owner (which sent DATAFWD+UNBLOCK) is
-            // confirmed in S. The requester sent UNBLOCK but formal env may
-            // violate protocol (send UNBLOCK while still in SM_D). It will be
-            // added to sharers on its next GETS via the serving path.
-            sharers_d = (1 << owner);
+            sharers_d = sharers;
             state_d   = DIR_S;
           end
           pending_op_d = POP_NONE;

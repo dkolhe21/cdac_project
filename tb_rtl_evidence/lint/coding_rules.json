@@ -1,0 +1,27 @@
+{
+  "comment": "Machine-checked coding rules for the Slice 16.1 RTL under test (tracked rtl/, the single normative copy). Run by lint/check_rules.py; derived from LINT.md and WP section 6. allowed_warnings lists the style warning classes already recorded in LINT.md - any other warning class is a violation.",
+  "modules": [
+    {
+      "name": "l1_mesi_ctrl",
+      "sources": ["rtl/pkg/tile_pkg.sv", "rtl/l1/l1_mesi_ctrl.sv"]
+    },
+    {
+      "name": "dir_ctrl",
+      "sources": ["rtl/pkg/tile_pkg.sv", "rtl/directory/dir_ctrl.sv"]
+    }
+  ],
+  "verilator": {
+    "flags": ["--lint-only", "-Wall", "-Wno-fatal", "-Irtl/pkg"],
+    "allowed_warnings": ["UNUSEDSIGNAL", "UNUSEDPARAM"]
+  },
+  "iverilog": {
+    "flags": ["-g2012", "-Wall", "-Irtl/pkg"],
+    "ignore_lines": ["sorry:"],
+    "output": "/tmp/opencode/check_rules_iverilog.vvp"
+  },
+  "rules": [
+    {"id": "CR1", "tool": "verilator", "text": "lint exits 0: no %Error"},
+    {"id": "CR2", "tool": "verilator", "text": "only the recorded style warning classes fire (UNUSEDSIGNAL, UNUSEDPARAM)"},
+    {"id": "CR3", "tool": "iverilog", "text": "compile exits 0; Icarus 'sorry:' limitation notes are not violations"}
+  ]
+}
