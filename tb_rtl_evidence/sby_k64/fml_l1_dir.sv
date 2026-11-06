@@ -255,6 +255,18 @@ module fml_l1_dir import tile_pkg::*; (
     if (dir_rsp_valid && dir_rsp_flit[HDR_HEAD]) begin
       env_dir_dst: assume (dir_rsp_flit[HDR_DEST_LO +: TILE_ID_W] < 2);
     end
+    // WP §3.3 rule 6 / Appendix A L1-FSM table: the requester emits MSG_UNBLOCK
+    // only on the DATA-install exit of IS_D/IM_D/SM_D, i.e. after it has
+    // received DATA and installed the line — so when the directory takes a
+    // UNBLOCK from its pending req_tile, that tile's L1 holds the line in
+    // S, E or M. ASSUMPTION: restricts the BMC state space; it is not a proof.
+    if (dir_req_valid && dir_req_flit[HDR_HEAD] &&
+        dir_req_flit[HDR_MSG_HI:HDR_MSG_LO] == MSG_UNBLOCK &&
+        dir_req_flit[HDR_SRC_HI:HDR_SRC_LO] == dir_req_tile) begin
+      env_unblk_installed: assume (dir_req_tile == 2'd0 ?
+          (l1_0_state == L1_S || l1_0_state == L1_E || l1_0_state == L1_M) :
+          (l1_1_state == L1_S || l1_1_state == L1_E || l1_1_state == L1_M));
+    end
   end
 endmodule
 `endif
