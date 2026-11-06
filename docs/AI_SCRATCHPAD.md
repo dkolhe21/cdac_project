@@ -169,6 +169,7 @@ A module is green only when **all four** hold:
 | **OI-6** | cocotb `units=` deprecated in 2.x, aliased to `unit=`; alias will be removed in a future major. Before any cocotb 3.x upgrade, run: `grep -rn 'units=' tb/ \| sed 's/units=/unit=/g'` then re-run tb/smoke and tb/l1_dir | ⚠️ **Open** |
 | **OI-8** | **F1 formal PASS depends on `assume(!dir_oflow)`.** Stands in for NIC credit management (§16.9 not implemented). Track until §16.9 landed; at that point re-run BMC without the assumption and confirm the verdict holds. | ⚠️ **Open** |
 | **OI-9** | **a2_2 sharer accuracy failure on FWD_WAIT→DIR_S transition.** Directory enters DIR_S with stale sharers while requester is SM_D. BMC K=64 & K=128 FAIL at step 48. Requires RTL fix in `dir_ctrl.sv` lines 304–310. | ⚠️ **Open** |
+| **OI-10** | **Formal harness assumption gap for UNBLOCK.** Counterexample shows requester sending UNBLOCK while in SM_D (transient). Real L1 RTL never does this (sends UNBLOCK only after DATA receipt + transition to S). Need harness assumption: `assume(UNBLOCK from req_tile → L1 state ∈ {S,E,M})`. | ⚠️ **Open** |
 
 ---
 
@@ -415,16 +416,20 @@ cd tb/l1_dir && make MODULE=test_f1_forward
 | 2. BMC K=128 | **FAIL** (a2_2 step 48) | `FORMAL_K128.md` |
 | 3. Static audit | COMPLETE | `AUDIT.md` (26/39 covered, 5 partial, 3 OOS, 5 temporal) |
 | 4. Lint sweep | COMPLETE | `LINT.md` (4 real UNUSEDSIGNAL, 42 style, 21 Icarus limit) |
-| 5. Open items | UPDATED | R5, OI-8, OI-9 recorded |
+| 5. Open items | UPDATED | R5, OI-8, OI-9, OI-10 recorded |
 
-**Key failure**: `a2_2` Sharer accuracy — directory enters `DIR_S` on `UNBLOCK` while requester still in `SM_D` (transient). Counterexample at step 48. Fix in `dir_ctrl.sv` lines 304–310.
+**Key failure**: `a2_2` Sharer accuracy — directory enters `DIR_S` on `UNBLOCK` while requester in `SM_D` (transient). Counterexample at step 48.
+
+**Root cause identified**: Formal harness allows requester to send `UNBLOCK` while in `SM_D` (transient). Real L1 RTL never does this (sends `UNBLOCK` only after `DATA` receipt + transition to `S`). RTL fix (conservative sharers update) cannot resolve harness assumption gap.
+
+**Fix required**: Add formal harness assumption `assume(UNBLOCK from req_tile → L1 state ∈ {S,E,M})`.
 
 **R5 / OI-8**: Formal verdicts conditional on `assume(!dir_oflow)` (NIC credits §16.9 not implemented).
 
-**OI-9 added**: Sharer accuracy failure on FWD_WAIT→DIR_S transition.
+**OI-9 / OI-10 added**: Sharer accuracy failure + harness assumption gap.
 
 **Gates on frozen RTL**: Spec 130/130 PASS, Docs 47/47 PASS, Icarus/Verilator exit 0.
 
 ---
 
-**Next session should start with**: Fix `a2_2` in `dir_ctrl.sv`, then re-run BMC K=64.
+**Next session should start with**: Add harness assumption for UNBLOCK, then re-run BMC K=64.
