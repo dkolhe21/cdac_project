@@ -1,4 +1,4 @@
-// l1_mesi_ctrl.sv — L1 MESI controller (WP Appendix A; §3.3 rules 2,5,6,8,9,10; ruling B2)
+// l1_mesi_ctrl.sv — L1 MESI controller (WP Appendix A; §3.3 rules 2,5,6,8,9,10; rulings B2, B6)
 // Scaffold scope: ONE line slot per tile + victim registers for the conflict-eviction
 // sub-step (B2). The 4x4 array + tree-PLRU land with §16.3; 9-flit packetisation is
 // folded in here until nic.sv lands (WP §3.1 block 5).
@@ -45,7 +45,8 @@ module l1_mesi_ctrl import tile_pkg::*; (
     output logic        tx_oflow_o,            // TX queue overflow (A3.x)
     // SVA observability (does not change behaviour)
     output logic        dispatch_o,            // a complete message dispatches this cycle
-    output msg_type_t   rx_msg_o
+    output msg_type_t   rx_msg_o,
+    output logic        abort_o                // B6: same-line INV aborted the miss this cycle
 );
 
   // ── protocol state ────────────────────────────────────────────────────────
@@ -295,6 +296,7 @@ module l1_mesi_ctrl import tile_pkg::*; (
       evict_pend  <= 1'b0;
       core_rsp_valid <= 1'b0;
       core_rsp_rdata <= '0;
+      abort_o     <= 1'b0;
       tx_wr <= '0; tx_rd <= '0; tx_cnt <= '0;
       tx_busy <= 1'b0; tx_flt <= '0; tx_len <= '0;
       tx_cur_msg <= MSG_RSVD0;
@@ -313,6 +315,7 @@ module l1_mesi_ctrl import tile_pkg::*; (
       tx_oflow_o <= 1'b0;
     end else begin
       core_rsp_valid <= 1'b0;
+      abort_o        <= 1'b0;
 
       // ---- TX queue write + retire ----
       if (tx_push_ok) begin
@@ -446,6 +449,16 @@ module l1_mesi_ctrl import tile_pkg::*; (
           MSG_INV: begin
             if (rx_addr == addr_q && is_held(state))
               state <= L1_I;
+            else if (rx_addr == addr_q && is_miss(state)) begin
+              // ruling B6 (Appendix A abort row: IS_D/IM_D/SM_D --INV--> same
+              // state): the same-line INV aborts the outstanding miss. The
+              // copy is invalidated now (SM_D still held S), the miss request
+              // already at the directory stands, and the parked access
+              // (addr_q/wdata_q) is re-driven when DATA re-acquires the line.
+              // INVACK (VC2) is issued combinationally above — never deferred.
+              data_q  <= '0;
+              abort_o <= 1'b1;
+            end
           end
 
           MSG_PUTACK: begin
