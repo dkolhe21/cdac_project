@@ -55,7 +55,7 @@ The design strictly adheres to the unified specification baseline established in
 - **Assertion Corpus**: 42 SystemVerilog Assertions categorized across single-writer safety (A1), directory consistency (A2), VC invariance (A3), packet framing (A4), credit flow (A5), routing determinism (A6), FSM determinism (A7), and memory address boundaries (A8).
 - **Formal Verification**: Safety properties verified with BMC to $K=64$ cycles; deadlock freedom proved through inductive structural invariant lemmas ($k=16$).
 - **Simulation**: Cocotb 2.1.0 testbenches executing on Icarus Verilog 13.0, including asynchronous reset validation, L2 bank arbitrated access, and 3-hop cache-to-cache forward intervention sequences.
-- **Patch Set Verifier**: Regression verifier (`verify_patch_set.py`) consistently passes 133/133 checks across all specifications and generated artifacts.
+- **Patch Set Verifier**: Regression verifier (`verify_patch_set.py`) consistently passes 134/134 checks across all specifications and generated artifacts.
 
 ---
 

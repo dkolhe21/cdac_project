@@ -25,7 +25,7 @@ A module is green only when **all four** hold:
 1. RTL lint clean — `python3 tb_rtl_evidence/lint/check_rules.py --verilator` passes CR1/CR2 against `tb_rtl_evidence/lint/coding_rules.json` (zero `%Error`; only the recorded style warning classes `UNUSEDSIGNAL`/`UNUSEDPARAM` fire); unit testbench pass.
 2. 42 bound SVA assertions pass BMC K=64 in SymbiYosys — **anti-vacuity**: the run must report its live assertion count in the elaborated design (post-B6 slice: 36 `$check` cells = 32 asserts + 4 assumes) and the depth reached; a green log without both numbers is not a pass.
 3. TLM reference model shadow comparison: zero mismatches across directed tests.
-4. `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **133/133, exit 0**.
+4. `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **134/134, exit 0**.
 
 Directed test suites per module:
 | Module | Tests | Covers |
@@ -53,7 +53,7 @@ Smoke test: 4-bit ALU (add/sub/pass), single cocotb test asserting (2+3)==5 → 
 | Scaffold | Tests | Status |
 |---|---|---|
 | tb/smoke | ALU + DFF (async reset) | PASS (positive + 2 negative controls) |
-| tb/l1_dir | F1 (forward release) | Scaffold only — positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL. Discrimination proven by mutation test (3 stub mutations A/B/C, 9/9 expected outcomes) |
+| tb/l1_dir | F1 (forward release) | Scaffold only — positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL. Discrimination proven by mutation test (originally 3 stub mutations A/B/C, 9/9; current matrix: 4 variants × 4 tests incl. the B8.1 head-insertion control MUT-D, **16/16 derived from the matrix**) |
 
 ## 6. Ruling B5 — A2.2 Split & Sharer-Accuracy Verification
 
@@ -91,5 +91,5 @@ Smoke test: 4-bit ALU (add/sub/pass), single cocotb test asserting (2+3)==5 → 
 
 **Golden result (v5 Task 3.6):** **B6.1 ✓** t=8 (INV to the mid-miss tile), **B6.2 ✓** (`abort_o` t=10, `INVACK` t=11), **B6.3 ✓** — both stores complete within the 600-cycle window (tile1 t=28, tile0 t=61), **B6.4 ✓** exactly one `M` (`l1_0=M l1_1=I`, `final_dir=M sharers=1`); all four VC queues empty at the end. Negative control unchanged: the defer-INV mutant fails **B6.2 `DEFER-INV FAULT PRESENT`** (fault present, `mutant_run.log`).
 
-**Ruling B7.2 (completion/decline):** no further RTL change — the tile accepts the stale grant: the parked access is re-driven by the DATA-install path, so the directory's transient always exits and the directory never records a tile that declined (it records the owner only from the accepted grant's UNBLOCK path). §12 item 13 (bounded progress under repeated aborts) stays **open** — recorded, no implementation change.
+**Ruling B7.2 (completion/decline):** no further RTL change — the tile accepts the stale grant: the parked access is re-driven by the DATA-install path, so the directory's transient always exits and the directory never records a tile that declined (it records the owner only from the accepted grant's UNBLOCK path). §12 item 13 (bounded progress under repeated aborts) was recorded **open** by B7 — ruling **B8** (§4.6 Lemma L2: a re-issued access is a new request, enqueued at the back of the line's queue, so the oldest pending request always completes) **closes** it.
 
