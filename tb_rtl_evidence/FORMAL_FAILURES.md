@@ -79,9 +79,11 @@ Where `s0 = (l1_0_state == L1_S)`, `s1 = (l1_1_state == L1_S)`.
 
 **Root cause**: Directory enters `DIR_S` on `UNBLOCK` from owner before the requester L1 has installed DATA and reached stable `S`. The directory's sharers mask is set to `{req_tile}` but the requester is still in `SM_D` (transient). Next cycle the directory receives `INV`/`GETS` and transitions to `DIR_INV_WAIT`, leaving a cycle where `DIR_S` holds an incorrect sharers mask.
 
-**Risk**: Under the formal environment (free interleavings, no NIC backpressure beyond `assume(!dir_oflow)`), this produces a one-cycle window where the directory's sharers mask claims an L1 is in S when it is still in SM_D. In simulation with proper NIC credits, this window may be narrower or absent — but the formal model proves it **can** occur.
+**Why the RTL fix didn't resolve it**: The counterexample shows the requester L1 sending `UNBLOCK` while still in `SM_D` (transient, awaiting DATA). The real L1 RTL (lines 203–206 in `l1_mesi_ctrl.sv`) only sends `UNBLOCK` after receiving `DATA` and transitioning to `S`. The formal harness has no assumption preventing this protocol violation. The conservative RTL fix (only adding old owner to sharers) cannot fix a harness environment issue.
 
-**Next action for RTL author**: In `dir_ctrl.sv` DIR_FWD_WAIT exit, either (a) clear `sharers_d = '0` and let the serving path add requester on DATA, or (b) delay DIR_S entry until requester reaches S (requires L1-to-directory notification not in current protocol).
+**Risk**: Under the formal environment (free interleavings, no NIC backpressure beyond `assume(!dir_oflow)`), this produces a one-cycle window where the directory's sharers mask claims an L1 is in S when it is still in SM_D. In simulation with proper NIC credits and the real L1 RTL, this window cannot occur — but the formal model proves it **can** occur under the current harness assumptions.
+
+**Next action**: Add formal harness assumption: `assume` that `UNBLOCK` from `req_tile` only arrives after that L1 received `DATA` (i.e., L1 state ≠ SM_D/IM_D/IS_D). This is a harness fix, not an RTL fix.
 
 ---
 

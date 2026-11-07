@@ -76,4 +76,10 @@ The following assertions held for all steps 0–47 (64-cycle bound not reached d
 
 **BMC K=64: FAIL** on assertion `a2_2` (Sharer accuracy) at step 48.
 
-See `tb_rtl_evidence/FORMAL_FAILURES.md` for root cause analysis and RTL fix location.
+**Why the RTL fix didn't resolve it**: The counterexample shows the requester L1 sending `UNBLOCK` while still in `SM_D` (transient, awaiting DATA). The real L1 RTL (lines 203–206 in `l1_mesi_ctrl.sv`) only sends `UNBLOCK` after receiving `DATA` and transitioning to `S`. The formal harness has no assumption preventing this protocol violation. The conservative RTL fix (only adding old owner to sharers) cannot fix a harness environment issue.
+
+**Formal scope assumption (R5 / OI-8)**: `assume(!dir_oflow)` — models NIC credit management (§16.9 not implemented). F1 formal results valid ONLY under this assumption. Re-run without assumption when §16.9 lands.
+
+**New harness assumption needed**: `assume` that `UNBLOCK` from `req_tile` only arrives after that L1 received `DATA` (i.e., L1 state ≠ SM_D/IM_D/IS_D). This is a harness fix, not an RTL fix.
+
+See `tb_rtl_evidence/FORMAL_FAILURES.md` for root cause analysis.
