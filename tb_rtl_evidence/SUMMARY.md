@@ -81,13 +81,13 @@ Both BMC results are **conditional on `assume(!dir_oflow)`** — an environment 
 
 **Sharer accuracy failure on FWD_WAIT→DIR_S transition** — directory enters `DIR_S` with stale sharers while requester is `SM_D`. Requires RTL fix in `dir_ctrl.sv` lines 304–310.
 
-## v4 Gate Status (2026-11-07, post-B6 landed RTL)
+## v5 Gate Status (2026-11-07, post-B7 landed RTL: B6 abort + B7.1 per-VC receive path)
 
-The frozen-RTL table above is history. Current gates on the landed tree (B6 RTL `0bc0d48f…`, ruling B6 commits `a14a1ad`/`455558a`/`77cff96`):
+The frozen-RTL table above is history. Current gates on the landed tree (ruling B6 commits `a14a1ad`/`455558a`/`77cff96` + v5 Task 3.5 per-VC `dir_ctrl.sv`):
 
 | Gate | Command | Result |
 |---|---|---|
-| Spec package | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | **132/132 PASS** (exit 0) |
+| Spec package | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | **133/133 PASS** (exit 0) |
 | Docs | `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv` | **47/47 PASS** (exit 0) |
 | Coding rules | `python3 tb_rtl_evidence/lint/check_rules.py` | **6/6 PASS** (exit 0) |
 | Smoke ALU | `cd tb/smoke && make MODULE=test_smoke TOPLEVEL=tb_smoke` | **PASS** (1/1) |
@@ -96,10 +96,10 @@ The frozen-RTL table above is history. Current gates on the landed tree (B6 RTL 
 | F2–F8 | `cd tb_self_test/l1_dir && PYTHONPATH=$PWD/../../tb/ref_model MODULE=test_f2_f8 make` | **8/8 PASS** |
 | Mutation matrix | `cd tb_self_test/l1_dir && python3 run_mutations.py` | **9/9 expected** |
 | Directed owner-evict (B5) | `cd tb_rtl_evidence/directed_owner_evict && make` | **2/2 PASS** |
-| Directed upgrade race (B6) golden | `cd tb_rtl_evidence/directed_upgrade_race && make` | B6.1 ✓, B6.2 ✓ (abort t=10, INVACK t=11), **B6.3 ✗ stall** — `RXQ head_msg=GETM` head-block in `DIR_INV_WAIT` (see `docs/02_PROBLEM_LOG.md` P-004 follow-on; escalated in v4 report §8) |
+| Directed upgrade race (B6) golden | `cd tb_rtl_evidence/directed_upgrade_race && make` | **B6.1 ✓ (t=8), B6.2 ✓ (abort t=10, INVACK t=11), B6.3 ✓ (tile1 t=28, tile0 t=61), B6.4 ✓ one M** — passes after B7.1 per-VC receive path; v4's `RXQ head_msg=GETM` stall is the P-004 follow-on / P-005 justification |
 | Directed upgrade race (B6) negative control | `make L1_MESI=l1_mesi_ctrl_defer_inv.sv SIM_BUILD=sim_build_mut` | B6.1 ✓ (fault present), B6.2 **FAIL: DEFER-INV FAULT PRESENT** — control asserts the fault is present |
-| BMC K=64 (v4, Task 0) | `sby -f l1_dir.sby` in `tb_rtl_evidence/sby_k64` | running (post-B6 RTL + `env_unblk_installed`; 36 `$check` = 32 asserts + 4 assumes) |
+| BMC K=64 (v5, Task 0) | `sby -f l1_dir.sby` in `tb_rtl_evidence/sby_k64` | running on post-B7.1 RTL + `env_unblk_installed` (36 `$check` = 32 asserts + 4 assumes) |
 
 ---
 
-*Generated 2026-11-06 05:45 UTC; v4 gate section added 2026-11-07.*
+*Generated 2026-11-06 05:45 UTC; v4 gate section added 2026-11-07; v5 gate section updated 2026-11-07 (B7.1 landed, package 133/133).*

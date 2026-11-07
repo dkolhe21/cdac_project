@@ -15,4 +15,4 @@ Gates:
 
 - docs checker: `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv` → 47/47
 - docs cross-check: `python3 verify_patch_set.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md` → 46/46
-- package gate (from inside `white_papers/final/`): `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` → 132/132 (B6 landed 2026-11-07; pre-B6 ran 131, pre-B5 ran 130)
+- package gate (from inside `white_papers/final/`): `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` → 133/133 (B7 landed 2026-11-07; pre-B7 ran 132, pre-B6 ran 131, pre-B5 ran 130)

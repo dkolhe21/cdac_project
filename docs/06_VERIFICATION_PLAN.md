@@ -25,7 +25,7 @@ A module is green only when **all four** hold:
 1. RTL lint clean — `python3 tb_rtl_evidence/lint/check_rules.py --verilator` passes CR1/CR2 against `tb_rtl_evidence/lint/coding_rules.json` (zero `%Error`; only the recorded style warning classes `UNUSEDSIGNAL`/`UNUSEDPARAM` fire); unit testbench pass.
 2. 42 bound SVA assertions pass BMC K=64 in SymbiYosys — **anti-vacuity**: the run must report its live assertion count in the elaborated design (post-B6 slice: 36 `$check` cells = 32 asserts + 4 assumes) and the depth reached; a green log without both numbers is not a pass.
 3. TLM reference model shadow comparison: zero mismatches across directed tests.
-4. `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **132/132, exit 0**.
+4. `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **133/133, exit 0**.
 
 Directed test suites per module:
 | Module | Tests | Covers |
@@ -83,5 +83,13 @@ Smoke test: 4-bit ALU (add/sub/pass), single cocotb test asserting (2+3)==5 → 
 
 **Negative control:** `l1_mesi_ctrl_defer_inv.sv` (same-name replacement, pattern of `dir_ctrl_mut.sv`) holds a same-line INV while the miss is open — the B6-forbidden behaviour. Expected and observed: B6.1 passes (the fault is present — the INV reaches the mid-miss tile), B6.2 fails with `DEFER-INV FAULT PRESENT` (no `abort_o`, no `INVACK`). The control asserts the fault is present; it never asserts that the symptom is absent.
 
-**Current golden result (recorded, not fixed):** B6.1 ✓ (t=8), B6.2 ✓ (`abort_o` t=10, `INVACK` t=11), **B6.3 ✗** — the directory stalls in `DIR_INV_WAIT` with `rxq` head = the second `GETM` and the `INVACK` behind it (`RXQ cnt=2 head_msg=GETM`), because `DIR_INV_WAIT` has no `GETM` pop branch and the slice's rxq is arrival-ordered. Escalated as a challenge in the v4 report §8: the WP specifies VC priority inside the router (§3.5 line 287, RESP > INV > FWD > REQ) but not the directory controller's per-VC RX pop order, and the directed slice's round-robin merge models neither. Logs: `tb_rtl_evidence/directed_upgrade_race/golden_run.log`, `mutant_run.log`.
+**Golden result at v4 (historical):** B6.1 ✓ (t=8), B6.2 ✓ (`abort_o` t=10, `INVACK` t=11), **B6.3 ✗** — the directory stalled in `DIR_INV_WAIT` with `rxq` head = the second `GETM` and the `INVACK` behind it (`RXQ cnt=2 head_msg=GETM`), because `DIR_INV_WAIT` has no `GETM` pop branch and the slice's rxq was arrival-ordered. Escalated as a challenge in the v4 report §8: the WP specifies VC priority inside the router (§3.5 line 287, RESP > INV > FWD > REQ) but not the directory controller's per-VC RX pop order, and the directed slice's round-robin merge models neither. **Resolved by ruling B7.1 — see §8 and P-005.** Logs: `tb_rtl_evidence/directed_upgrade_race/golden_run.log`, `mutant_run.log`.
+
+## 8. Ruling B7 — Per-VC Directory Receive Path (B7.1)
+
+**Mechanism (v5 Task 3.5):** `rtl/directory/dir_ctrl.sv` — the single arrival-ordered RX mailbox becomes **four per-VC queues** (`rxq_* [4][RXQ_DEPTH]`, depth 4 each). Push is classified at publish by `msg_to_vc()` (`VC_REQ`/`VC_FWD`/`VC_RESP`/`VC_INV`); a fixed-priority combinational arbiter selects the presented head `h_vc` by the fabric's class priority **RESP > INV > FWD > REQ** (WP §3.5), so a response is never head-of-line blocked behind an earlier request. The FSM accept sets are unchanged: within a transient the arbiter still presents only messages the FSM can pop or ignore, so `DIR_INV_WAIT` sees its `INVACK` first among what it accepts. Per-VC FIFO ordering (I4) holds inside each queue; the overflow check is per queue (`rx_oflow_o` sticky, unchanged semantics).
+
+**Golden result (v5 Task 3.6):** **B6.1 ✓** t=8 (INV to the mid-miss tile), **B6.2 ✓** (`abort_o` t=10, `INVACK` t=11), **B6.3 ✓** — both stores complete within the 600-cycle window (tile1 t=28, tile0 t=61), **B6.4 ✓** exactly one `M` (`l1_0=M l1_1=I`, `final_dir=M sharers=1`); all four VC queues empty at the end. Negative control unchanged: the defer-INV mutant fails **B6.2 `DEFER-INV FAULT PRESENT`** (fault present, `mutant_run.log`).
+
+**Ruling B7.2 (completion/decline):** no further RTL change — the tile accepts the stale grant: the parked access is re-driven by the DATA-install path, so the directory's transient always exits and the directory never records a tile that declined (it records the owner only from the accepted grant's UNBLOCK path). §12 item 13 (bounded progress under repeated aborts) stays **open** — recorded, no implementation change.
 

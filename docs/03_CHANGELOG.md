@@ -9,7 +9,7 @@ All notable changes and implementation iterations for the Cache-Coherent Tiled M
 
 | Milestone | Target Date | Status |
 |---|---|---|
-| M0 — Spec package + gate 132/132 | Week 1 | ✅ Done (2026-11-04) |
+| M0 — Spec package + gate 133/133 | Week 1 | ✅ Done (2026-11-04) |
 | M1 — l2_bank + l2_ctrl green | Week 2 | Pending |
 | M2 — l1_mesi_ctrl + dir_ctrl co-landed | Week 3-4 | Pending |
 | M3 — nic + router + mem_tap green | Week 5 | Pending |

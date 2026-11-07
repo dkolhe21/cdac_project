@@ -46,5 +46,5 @@ An implementation row is marked **Green** if and only if all four conditions pas
 1. **RTL Unit Green**: SystemVerilog module compiles clean with zero warnings under Verilator (`-Wall`) — enforced by `python3 tb_rtl_evidence/lint/check_rules.py --verilator` against `tb_rtl_evidence/lint/coding_rules.json` (CR1: no `%Error`; CR2: only the recorded style warning classes fire) — and passes directed unit testbenches.
 2. **SVA Category Clean**: All mapped SystemVerilog Assertions in categories A1–A8 pass Bounded Model Checking ($K = 64$) under SymbiYosys.
 3. **Reference-Model Shadow Agrees**: The transaction-level shadow reference model (`pyuvm`/`cocotb`) achieves 0 data and state mismatches on the test suite.
-4. **Verifier Gate Pass**: `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` returns **PASS - 132/132 checks**, guaranteeing zero specification regression.
+4. **Verifier Gate Pass**: `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` returns **PASS - 133/133 checks**, guaranteeing zero specification regression.
 

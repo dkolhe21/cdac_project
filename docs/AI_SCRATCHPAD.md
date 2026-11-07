@@ -90,7 +90,7 @@ status: dtr_busy    (one transaction per bank, N4/N5)
 
 | Gate | Command | Result |
 |------|---------|--------|
-| **Spec gate** | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | ✅ **132/132 PASS** |
+| **Spec gate** | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | ✅ **133/133 PASS** |
 | **Doc gate** | `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv` | ✅ **47/47 PASS** |
 | **Doc gate (no build-order)** | Same without `--build-order` | ✅ **COUNT DRIFT — exits 1** (guard works) |
 
@@ -153,7 +153,7 @@ A module is green only when **all four** hold:
 1. **RTL lint clean** — `python3 tb_rtl_evidence/lint/check_rules.py --verilator` (CR1/CR2 against `tb_rtl_evidence/lint/coding_rules.json`); unit testbench pass
 2. **42 bound SVA assertions** pass BMC K=64 in SymbiYosys
 3. **TLM reference model shadow** comparison: zero mismatches across directed tests
-4. **Spec gate**: `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **132/132, exit 0**
+4. **Spec gate**: `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **133/133, exit 0**
 
 ---
 
@@ -203,7 +203,7 @@ A module is green only when **all four** hold:
 2. **Implement `rtl/l1/l1_mesi_ctrl.sv` + `rtl/directory/dir_ctrl.sv` (co-landed)** — 9-state L1 FSM, 8-state dir FSM, forward release, conflict eviction, exclusive bit, DTR (4-5 days each)
 3. **SVA category for L1/dir** — run under BMC K=64
 4. **Reference-model shadow** for L1/dir — driven from same cocotb test (`tb/l1_dir/`)
-5. **Run both gates** — must stay 132/132 and 47/47
+5. **Run both gates** — must stay 133/133 and 47/47
 
 ---
 
@@ -249,7 +249,7 @@ verilator --version            # → Verilator 5.x (for lint only)
 ### Run Commands
 
 ```bash
-# Spec gate (must be 132/132)
+# Spec gate (must be 133/133)
 cd /mnt/Code/visualstudio/Design-arch_multi-core
 python3 pd/v1/verify_patch_set.py --dir white_papers/final \
   --build-script pd/v1/build_diagrams_html.py
@@ -285,7 +285,7 @@ cd tb/l1_dir && make MODULE=test_f1_forward
 - [ ] Clone repo to new machine
 - [ ] Install cocotb 2.1.0 via pipx, add `~/.local/bin` to PATH
 - [ ] Verify `cocotb-config --version` → 2.1.0, `iverilog -V` → 13.0
-- [ ] Run spec gate → 132/132
+- [ ] Run spec gate → 133/133
 - [ ] Run doc gate with build-order → 47/47
 - [ ] Run doc gate WITHOUT build-order → COUNT DRIFT (exits 1)
 - [ ] Run `tb/smoke/` → PASS (1 test, positive + 2 negatives)
@@ -392,7 +392,7 @@ cd tb/l1_dir && make MODULE=test_f1_forward
 2. `rtl/l1/l1_mesi_ctrl.sv` + `rtl/directory/dir_ctrl.sv` **co-landed** (exclusive bit + conflict eviction)
 3. SVA category for L1/dir under BMC K=64
 4. Reference-model shadow for L1/dir driven from `tb/l1_dir/`
-5. Run both gates — must stay 132/132 + 47/47
+5. Run both gates — must stay 133/133 + 47/47
 
 **Do NOT start** those until next work order arrives.
 
