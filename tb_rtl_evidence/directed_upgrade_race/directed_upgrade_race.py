@@ -206,17 +206,18 @@ async def test_concurrent_upgrade_race(dut):
 
     l1_0, l1_1 = _v(dut.l1_0_state), _v(dut.l1_1_state)
 
-    # Stall diagnostic: what the directory is actually holding. A non-empty
-    # rxq whose head is not an INVACK while state==INV_WAIT is the
-    # head-of-line block (the slice's arrival-ordered rxq has no GETM pop
-    # branch in DIR_INV_WAIT, dir_ctrl.sv INV_WAIT).
+    # Stall diagnostic: what the directory is actually holding (B7.1 per-VC
+    # mailbox: one queue per VC, pop order RESP > INV > FWD > REQ). A non-empty
+    # queue whose head is not accepted by the current transient while
+    # state==INV_WAIT is the head-of-line block.
     try:
-        rd, wr = _v(dut.u_dir.rxq_rd), _v(dut.u_dir.rxq_wr)
-        cnt = _v(dut.u_dir.rxq_cnt)
-        head = _v(dut.u_dir.rxq_msg[rd]) if cnt > 0 else -1
+        cnts = [_v(dut.u_dir.rxq_cnt[vc]) for vc in range(4)]
+        hvc = _v(dut.u_dir.h_vc)
+        head = _v(dut.dir_rx_msg) if sum(cnts) > 0 else -1
         dut._log.info(
-            "RXQ rd=%s wr=%s cnt=%s head_msg=%s inv_mask=%s pending_req=%s",
-            rd, wr, cnt,
+            "RXQ vc_cnt[REQ,FWD,RESP,INV]=%s h_vc=%s head_msg=%s "
+            "inv_mask=%s pending_req=%s",
+            cnts, hvc,
             MSG_NAME.get(head, head),
             bin(_v(dut.u_dir.inv_mask)) if _v(dut.u_dir.inv_mask) >= 0 else "x",
             _v(dut.u_dir.req_tile))
