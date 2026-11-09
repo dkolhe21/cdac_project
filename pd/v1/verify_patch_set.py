@@ -391,10 +391,10 @@ def main() -> int:
     if wb:
         # H1 fourteen item rows, and the document must claim fourteen
         rows = re.findall(r"^### \u00a716\.(\d+) ", wb, re.M)
-        check("H1", "work breakdown has 14 item rows", [int(x) for x in rows] == list(range(1, 15)),
+        check("H1", "work breakdown has 15 item rows", [int(x) for x in rows] == list(range(1, 16)),
               f"rows {rows}")
         check("H1b", "work breakdown no longer claims 11 items",
-              "11 \u00a716 items" not in wb and "14 \u00a716 items" in wb,
+              "11 \u00a716 items" not in wb and "15 \u00a716 items" in wb,
               "stale '11 items' claim" if "11 \u00a716 items" in wb else "")
 
         # H2 no mis-attributed assertion categories
@@ -421,10 +421,10 @@ def main() -> int:
             check("H4b", f"coverage section names: {key}", ok, d)
 
         # H5 effort stated as a range
-        ok, d = contains(wb, "15\u201318 days")
-        check("H5", "effort total stated as a range (15-18 days)", ok, d)
-        ok, d = contains(wb, "19\u201323 days")
-        check("H5b", "DMA-inclusive effort stated as a range (19-23 days)", ok, d)
+        ok, d = contains(wb, "16\u201320 days")
+        check("H5", "effort total stated as a range (16-20 days)", ok, d)
+        ok, d = contains(wb, "20\u201325 days")
+        check("H5b", "DMA-inclusive effort stated as a range (20-25 days)", ok, d)
 
         # H6 assertion-dependent items are not all gated at Week 4
         wk4 = re.findall(r"\|\s*(?:§16\.\d+[^|]*)\|[^|]*\|[^|]*\|\s*Week 4\s*\|", wb)
@@ -574,16 +574,74 @@ def main() -> int:
     # ---------------- self-consistency: the stated check count must equal the count actually run
     # (this closes the propagation class for the verifier count itself: the breakdown and the
     #  slice quote a number; if the verifier grows, these fail until the prose is updated)
+    # J4 (ruling B6): a same-line INV aborts the L1's outstanding miss. The abort is
+    # specified in rule 6, restated in Lemma L1, tabulated in Appendix A's L1 FSM, and
+    # tracked as a section-16 item. The assertion count stays 42 (covered by A3.x).
+    _r6 = re.search(r"^6\. \*\*Receptivity.*$", wp, re.M)
+    _r6ok = bool(_r6) and "aborts that outstanding miss" in _r6.group(0)
+    _lem = re.search(r"\*\*Lemma L1[^\n]*", wp)
+    _lemok = bool(_lem) and "no same-line message is serviced" in _lem.group(0)
+    _fsm = "IS_D / IM_D / SM_D | INV received (VC3) for the line being missed" in wp
+    _it12 = re.search(r"^\| 12 \| \*\*Lemma L1 versus a mid-miss tile\*\*.*$", wp, re.M)
+    _it12ok = bool(_it12) and "Closed by ruling B6" in _it12.group(0)
+    _wb15 = bool(wb) and "### \u00a716.15 \u2014 Same-line INV abort (B6)" in wb
+    check("J4", "B6: the same-line INV abort is specified in rule 6, Lemma L1, Appendix A and section 16.15",
+          _r6ok and _lemok and _fsm and _it12ok and _wb15,
+          f"rule6={_r6ok} lemma1={_lemok} appendixA={_fsm} item12={_it12ok} breakdown={_wb15}")
+
+    # The three count-guard checks (J1, J3, J2) quote the number of checks the verifier
+    # runs, so each must know how many of them are still pending when it executes. The
+    # table makes that explicit instead of hand-tuned offsets, which drift whenever a
+    # check is added.
+    _PENDING_GUARDS = {"J1": 3, "J3": 2, "J2": 1}
+
+    # J5 (ruling B7): the directory's receive path is per-VC, and an aborted access has
+    # an explicit completion rule. Both were gaps that let a spec-conformant directory
+    # deadlock the concurrent-upgrade race.
+    _pervc = "The directory controller's receive path is per-VC (ruling B7)" in wp
+    _prio = "one queue per VC" in wp and "RESP > INV > FWD > REQ" in wp
+    _comp = "The aborted access is then completed or re-issued (ruling B7)" in wp
+    _it13 = re.search(r"^\| 13 \| \*\*Bounded progress under repeated upgrade-race aborts\*\*", wp, re.M)
+    _ai = re.search(r"^\|\s*\*\*AI\*\*\s*\|", wp, re.M)
+    _lld = "the receive path is PER-VC" in l4
+    check("J5", "B7: the directory receive path is per-VC, the aborted access has a completion rule, and section 12 item 13 is open",
+          _pervc and _prio and _comp and bool(_it13) and bool(_ai) and _lld,
+          f"pervc={_pervc} prio={_prio} completion={_comp} item13={bool(_it13)} rowAI={bool(_ai)} lld={_lld}")
+
+    # J6 (ruling B8): the re-issue ordering rule and Lemma L2 close the livelock
+    # challenge (section 12 item 13). The oldest pending request for a line must always
+    # complete - that is what bounds progress.
+    _r6b8 = "The re-issue is a new request (ruling B8)" in wp
+    _l2 = re.search(r"\*\*Lemma L2 \(bounded progress under repeated upgrade aborts\)\.\*\*", wp)
+    _l2ok = bool(_l2) and "never invalidated by a concurrent upgrade" in wp
+    _it13 = re.search(r"^\| 13 \| \*\*Bounded progress under repeated upgrade-race aborts\*\*.*$", wp, re.M)
+    _it13ok = bool(_it13) and "Closed by ruling B8" in _it13.group(0)
+    _aj = re.search(r"^\|\s*\*\*AJ\*\*\s*\|", wp, re.M)
+    _spec8 = "Re-issue ordering (ruling B8)" in sp
+    check("J6", "B8: the re-issue ordering rule, Lemma L2 and the closure of section 12 item 13 are present",
+          _r6b8 and _l2ok and _it13ok and bool(_aj) and _spec8,
+          f"rule6={_r6b8} lemma2={_l2ok} item13={_it13ok} rowAJ={bool(_aj)} spec={_spec8}")
+
+
     if wb and not args.partial:
         stated_all = [int(x) for x in re.findall(r"(\d+)[- ]checks?\b", wb)]
-        exp1 = len(results) + 2
+        exp1 = len(results) + _PENDING_GUARDS["J1"]
         check("J1", "every count the breakdown quotes for the verifier equals the count actually run",
               bool(stated_all) and all(x == exp1 for x in stated_all),
               f"breakdown quotes {stated_all}; verifier runs {exp1}")
+    # J3 (ruling B5 amendment): the A2.2 row must cite the mid-miss open item, and that
+    # section-12 item must exist. Without this, A2.2a could silently be treated as covering
+    # the mid-miss window it is vacuous in.
+    _a22 = re.search(r"^\|\s*A2\.2\s*\|.*$", wp, re.M)
+    _cite = re.search(r"\u00a7\s*12\s*(?:item|#)\s*(\d+)", _a22.group(0)) if _a22 else None
+    check("J3", "A2.2 cites the mid-miss open item and that section-12 item exists",
+          bool(_cite) and _cite.group(1) in existing,
+          f"A2.2 cites section-12 item {(_cite.group(1) if _cite else 'nothing')}")
+
     if sl and not args.partial:
         m_cnt2 = re.search(r"reports\s+(\d+)\s*/\s*(\d+)", sl)
         stated2 = int(m_cnt2.group(2)) if m_cnt2 else None
-        exp2 = len(results) + 1
+        exp2 = len(results) + _PENDING_GUARDS["J2"]
         check("J2", "the count the slice's exit criteria quote equals the count actually run",
               stated2 == exp2,
               f"slice quotes {stated2}; verifier runs {exp2}")

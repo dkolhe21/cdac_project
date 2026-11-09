@@ -225,6 +225,7 @@
     IM_D --&gt; M : DATA exclusive, install, write, send UNBLOCK on VC2
     S --&gt; SM_D : Store hit, send GETM on VC0
     SM_D --&gt; M : DATA exclusive, write store data, send UNBLOCK on VC2
+    SM_D --&gt; SM_D : INV received (VC3) for the same line, abort the outstanding miss, invalidate the copy, send INVACK on VC2, re-issue the access (B6)
     E --&gt; M : Store hit, silent upgrade, no message, L1 authoritative for E vs M
     M --&gt; MI_A : Eviction, send PUTM on VC0, 9 flits with dirty line
     MI_A --&gt; I : PUTACK, release the way
@@ -290,7 +291,7 @@
     DIR_FWD_WAIT --&gt; DIR_FWD_WAIT : PUTM from owner, satisfies the forward, write bank, set dirty, clear old owner bit, send PUTACK, N12
     DIR_FWD_WAIT --&gt; DIR_FWD_WAIT : PUTS from owner, cancel the forward, bank holds the current value, serve requester from bank, send PUTACK, N12
     DIR_FWD_WAIT --&gt; DIR_FWD_WAIT : INVACK defensive, duplicate release, ignore, no state change, N12
-    DIR_FWD_WAIT --&gt; DIR_S : UNBLOCK with pending_op GETS
+    DIR_FWD_WAIT --&gt; DIR_S : UNBLOCK with pending_op GETS, commit sharers = requester + old owner unless the old owner already released (B5)
     DIR_FWD_WAIT --&gt; DIR_M : UNBLOCK with pending_op GETM
     DIR_S --&gt; DIR_S : PUTS from a sharer, clear that bit, send PUTACK
     DIR_S --&gt; DIR_I : PUTS from the last sharer, send PUTACK
@@ -363,7 +364,7 @@
         S2[&quot;Remote NoC request&lt;br/&gt;GETS, GETM, PUTS, PUTM, DMA_WRITE from the NIC RX path&quot;]
         S3[&quot;Controller-internal traffic&lt;br/&gt;DIR_MEM_WAIT fill read, DIR-EVICT WRITE_BACK bank to tap&quot;]
     end
-    Q[&quot;Pending request handling per bank&lt;br/&gt;the queue is the bank&#39;s request queue, behind the single serialized L2 port - WP 3.2, 3.7;&lt;br/&gt;queue depth and service order: NOT SPECIFIED IN WP - open item 9, Week 4&quot;]
+    Q[&quot;Pending request handling per bank&lt;br/&gt;the queue is the bank&#39;s request queue, behind the single serialized L2 port - WP 3.2, 3.7;&lt;br/&gt;queue depth and service order: NOT SPECIFIED IN WP - open item 9, Week 4&lt;br/&gt;the receive path is PER-VC: one queue per VC, popped by class priority RESP &amp;gt; INV &amp;gt; FWD &amp;gt; REQ - B7&lt;br/&gt;a re-issued access is a NEW request and enters this queue at the BACK, so the oldest pending request for a line always completes - B8&quot;]
     ARB[&quot;Bank arbiter - single logical access at a time&lt;br/&gt;one outstanding directory transaction per bank - WP 3.7&quot;]
     CTRL[&quot;Directory controller + DTR&quot;]
     subgraph ARRAYS[&quot;Serialized bank resources&quot;]

@@ -82,17 +82,20 @@ module dir_ctrl import tile_pkg::*; (
   logic                 iss0_we, iss1_we, iss0_excl, iss1_excl;
   logic [1:0] iss_n;
 
-  // ── RX engine + mailbox (messages arrive here while the DTR is busy) ──────
+  // ── RX engine + per-VC mailboxes (B7.1: one queue per VC, popped by the ──
+  //    fabric's class priority RESP > INV > FWD > REQ — WP §3.5, so a
+  //    response is never head-of-line blocked by an earlier request)
   localparam int RXQ_DEPTH = 4;
-  logic [3:0]           rxq_msg  [RXQ_DEPTH];
-  logic [TILE_ID_W-1:0] rxq_src  [RXQ_DEPTH];
-  logic [ADDR_W-1:0]    rxq_addr [RXQ_DEPTH];
-  logic [LINE_BITS-1:0] rxq_data [RXQ_DEPTH];
-  logic                 rxq_we   [RXQ_DEPTH];
-  logic                 rxq_excl [RXQ_DEPTH];
-  logic [$clog2(RXQ_DEPTH)-1:0] rxq_wr, rxq_rd;
-  logic [2:0] rxq_cnt;
+  logic [3:0]           rxq_msg  [4][RXQ_DEPTH];
+  logic [TILE_ID_W-1:0] rxq_src  [4][RXQ_DEPTH];
+  logic [ADDR_W-1:0]    rxq_addr [4][RXQ_DEPTH];
+  logic [LINE_BITS-1:0] rxq_data [4][RXQ_DEPTH];
+  logic                 rxq_we   [4][RXQ_DEPTH];
+  logic                 rxq_excl [4][RXQ_DEPTH];
+  logic [$clog2(RXQ_DEPTH)-1:0] rxq_wr [4], rxq_rd [4];
+  logic [2:0] rxq_cnt [4];
   logic rxq_empty;
+  vc_id_t h_vc, rx_push_vc;
   logic [3:0]           h_msg;
   logic [TILE_ID_W-1:0] h_src;
   logic [ADDR_W-1:0]    h_addr;
@@ -311,11 +314,7 @@ module dir_ctrl import tile_pkg::*; (
             state_d   = DIR_M;
           end else begin
             owner_d   = '0;
-            // Conservative: only the old owner (which sent DATAFWD+UNBLOCK) is
-            // confirmed in S. The requester sent UNBLOCK but formal env may
-            // violate protocol (send UNBLOCK while still in SM_D). It will be
-            // added to sharers on its next GETS via the serving path.
-            sharers_d = (1 << owner);
+            sharers_d = sharers;
             state_d   = DIR_S;
           end
           pending_op_d = POP_NONE;
@@ -496,7 +495,9 @@ module dir_ctrl import tile_pkg::*; (
       tx_busy <= 1'b0; tx_flt <= '0; tx_len <= '0;
       tx_cur_msg <= MSG_RSVD0; tx_cur_dst <= '0; tx_cur_addr <= '0;
       tx_cur_data <= '0; tx_cur_we <= 1'b0; tx_cur_excl <= 1'b0;
-      rxq_wr <= '0; rxq_rd <= '0; rxq_cnt <= '0;
+      for (int vc = 0; vc < 4; vc++) begin
+        rxq_wr[vc] <= '0; rxq_rd[vc] <= '0; rxq_cnt[vc] <= '0;
+      end
       rx_active <= 1'b0; rx_flt <= '0;
       rx_hdr_msg <= MSG_RSVD0; rx_hdr_src <= '0; rx_hdr_addr <= '0;
       rx_hdr_we <= 1'b0; rx_hdr_excl <= 1'b0;
@@ -562,14 +563,14 @@ module dir_ctrl import tile_pkg::*; (
             rx_hdr_we   <= noc_req_flit[HDR_WE];
             rx_hdr_excl <= noc_req_flit[HDR_EXCL];
             if (noc_req_flit[HDR_LEN_HI:HDR_LEN_LO] == 6'd1) begin
-              rxq_msg[rxq_wr]  <= noc_req_flit[HDR_MSG_HI:HDR_MSG_LO];
-              rxq_src[rxq_wr]  <= noc_req_flit[HDR_SRC_LO +: TILE_ID_W];
-              rxq_addr[rxq_wr] <= noc_req_flit[HDR_ADDR_HI:HDR_ADDR_LO];
-              rxq_we[rxq_wr]   <= noc_req_flit[HDR_WE];
-              rxq_excl[rxq_wr] <= noc_req_flit[HDR_EXCL];
-              rxq_data[rxq_wr] <= '0;
-              rxq_wr <= rxq_wr + 1'b1;
-              if (rxq_cnt >= 3'd4) rx_oflow_o <= 1'b1;
+              rxq_msg[rx_push_vc][rxq_wr[rx_push_vc]]  <= noc_req_flit[HDR_MSG_HI:HDR_MSG_LO];
+              rxq_src[rx_push_vc][rxq_wr[rx_push_vc]]  <= noc_req_flit[HDR_SRC_LO +: TILE_ID_W];
+              rxq_addr[rx_push_vc][rxq_wr[rx_push_vc]] <= noc_req_flit[HDR_ADDR_HI:HDR_ADDR_LO];
+              rxq_we[rx_push_vc][rxq_wr[rx_push_vc]]   <= noc_req_flit[HDR_WE];
+              rxq_excl[rx_push_vc][rxq_wr[rx_push_vc]] <= noc_req_flit[HDR_EXCL];
+              rxq_data[rx_push_vc][rxq_wr[rx_push_vc]] <= '0;
+              rxq_wr[rx_push_vc] <= rxq_wr[rx_push_vc] + 1'b1;
+              if (rxq_cnt[rx_push_vc] >= 3'd4) rx_oflow_o <= 1'b1;
             end else begin
               rx_active <= 1'b1;
               rx_flt    <= 4'd1;
@@ -578,14 +579,14 @@ module dir_ctrl import tile_pkg::*; (
         end else begin
           if (rx_flt == 4'd8) begin
             rx_active <= 1'b0;
-            rxq_msg[rxq_wr]  <= rx_hdr_msg;
-            rxq_src[rxq_wr]  <= rx_hdr_src;
-            rxq_addr[rxq_wr] <= rx_hdr_addr;
-            rxq_we[rxq_wr]   <= rx_hdr_we;
-            rxq_excl[rxq_wr] <= rx_hdr_excl;
-            rxq_data[rxq_wr] <= {noc_req_flit[63:0], rx_data[447:0]};
-            rxq_wr <= rxq_wr + 1'b1;
-            if (rxq_cnt >= 3'd4) rx_oflow_o <= 1'b1;
+            rxq_msg[rx_push_vc][rxq_wr[rx_push_vc]]  <= rx_hdr_msg;
+            rxq_src[rx_push_vc][rxq_wr[rx_push_vc]]  <= rx_hdr_src;
+            rxq_addr[rx_push_vc][rxq_wr[rx_push_vc]] <= rx_hdr_addr;
+            rxq_we[rx_push_vc][rxq_wr[rx_push_vc]]   <= rx_hdr_we;
+            rxq_excl[rx_push_vc][rxq_wr[rx_push_vc]] <= rx_hdr_excl;
+            rxq_data[rx_push_vc][rxq_wr[rx_push_vc]] <= {noc_req_flit[63:0], rx_data[447:0]};
+            rxq_wr[rx_push_vc] <= rxq_wr[rx_push_vc] + 1'b1;
+            if (rxq_cnt[rx_push_vc] >= 3'd4) rx_oflow_o <= 1'b1;
           end else begin
             case (rx_flt)
               4'd1: rx_data[ 63:  0] <= noc_req_flit[63:0];
@@ -602,22 +603,32 @@ module dir_ctrl import tile_pkg::*; (
         end
       end
 
-      // mailbox pointers: push above, pop below
-      if (pop)      rxq_rd  <= rxq_rd + 1'b1;
-      rxq_cnt <= rxq_cnt + (rx_publish ? 3'd1 : 3'd0) - (pop ? 3'd1 : 3'd0);
-      if (rx_publish && rxq_cnt >= 3'd4 && !pop) rx_oflow_o <= 1'b1;
+      // per-VC pointers: push above, pop below (pop the arbiter's pick; a
+      // same-cycle push+pop on one queue holds its count)
+      if (pop) rxq_rd[h_vc] <= rxq_rd[h_vc] + 1'b1;
+      for (int vc = 0; vc < 4; vc++) begin
+        rxq_cnt[vc] <= rxq_cnt[vc]
+                     + ((rx_publish && vc == int'(rx_push_vc)) ? 3'd1 : 3'd0)
+                     - ((pop       && vc == int'(h_vc))        ? 3'd1 : 3'd0);
+      end
+      if (rx_publish && rxq_cnt[rx_push_vc] >= 3'd4 &&
+          !(pop && h_vc == rx_push_vc)) rx_oflow_o <= 1'b1;
     end
   end
 
-  // ── RX publish detector ───────────────────────────────────────────────────
+  // ── RX publish detector + push-VC classification ──────────────────────────
   always_comb begin
     rx_publish = 1'b0;
+    rx_push_vc = VC_REQ;
     if (noc_req_valid) begin
-      if (!rx_active)
+      if (!rx_active) begin
         rx_publish = noc_req_flit[HDR_HEAD] &&
                      (noc_req_flit[HDR_LEN_HI:HDR_LEN_LO] == 6'd1);
-      else
+        rx_push_vc = msg_to_vc(msg_type_t'(noc_req_flit[HDR_MSG_HI:HDR_MSG_LO]));
+      end else begin
         rx_publish = (rx_flt == 4'd8);
+        rx_push_vc = msg_to_vc(rx_hdr_msg);
+      end
     end
   end
 
@@ -646,13 +657,21 @@ module dir_ctrl import tile_pkg::*; (
   end
 
   // ── mailbox head + status ─────────────────────────────────────────────────
-  assign rxq_empty = (rxq_cnt == 3'd0);
-  assign h_msg  = rxq_msg[rxq_rd];
-  assign h_src  = rxq_src[rxq_rd];
-  assign h_addr = rxq_addr[rxq_rd];
-  assign h_data = rxq_data[rxq_rd];
-  assign h_we   = rxq_we[rxq_rd];
-  assign h_excl = rxq_excl[rxq_rd];
+  // B7.1 pop arbitration: fixed class priority RESP > INV > FWD > REQ (WP §3.5)
+  always_comb begin
+    if      (rxq_cnt[VC_RESP] != 3'd0) h_vc = VC_RESP;
+    else if (rxq_cnt[VC_INV]  != 3'd0) h_vc = VC_INV;
+    else if (rxq_cnt[VC_FWD]  != 3'd0) h_vc = VC_FWD;
+    else                               h_vc = VC_REQ;
+  end
+  assign rxq_empty = (rxq_cnt[VC_REQ]  == 3'd0) && (rxq_cnt[VC_FWD]  == 3'd0) &&
+                     (rxq_cnt[VC_RESP] == 3'd0) && (rxq_cnt[VC_INV]  == 3'd0);
+  assign h_msg  = rxq_msg[h_vc][rxq_rd[h_vc]];
+  assign h_src  = rxq_src[h_vc][rxq_rd[h_vc]];
+  assign h_addr = rxq_addr[h_vc][rxq_rd[h_vc]];
+  assign h_data = rxq_data[h_vc][rxq_rd[h_vc]];
+  assign h_we   = rxq_we[h_vc][rxq_rd[h_vc]];
+  assign h_excl = rxq_excl[h_vc][rxq_rd[h_vc]];
 
   assign dir_state_o  = state;
   assign owner_o      = owner;

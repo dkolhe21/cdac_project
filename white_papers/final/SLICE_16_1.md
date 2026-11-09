@@ -176,6 +176,6 @@ The slice is green when:
 1. **RTL** — `l1_mesi_ctrl` and `dir_ctrl` implement every row in §2.1 and §1.1; the L1 exposes its MESI state to the NIC for header bit [39].
 2. **SVA** — A1.1, A1.3, A2.2, A2.6, A3.x, A5.x, A7.x all pass in simulation (BMC K = 64 for safety).
 3. **Reference model** — the scoreboard shows zero mismatches on F1–F8 and on the formal run (F9).
-4. **Verifier** — `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` still reports 130/130 (no spec regression).
+4. **Verifier** — `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` still reports 134/134 (no spec regression).
 
 Until all four are green, §8's "Forward release implemented" claim stays "Planned — milestone N".

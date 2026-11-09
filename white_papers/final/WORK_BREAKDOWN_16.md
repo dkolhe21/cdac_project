@@ -2,9 +2,9 @@
 
 **Source of truth:** `FINAL_whitepaper_v3.0.md` (v3.0) + `SPEC_SHEET.md` + the approved LLD PDF.
 **Status of every item below:** specified in the WP; **not yet implemented** in RTL, reference model or testbench.
-**Verifier:** run `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` after any edit to the WP or the LLD `.md` sources (130 checks).
+**Verifier:** run `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` after any edit to the WP or the LLD `.md` sources (134 checks).
 
-This document maps each of the 14 §16 items to (a) the normative rule(s) it realises, (b) the RTL module that owns it, (c) the SVA/formal assertion category that guards it, (d) the reference-model shadow that must agree with it, and (e) its dependency order. It is the entry point for the RTL phase; every §8 claim in the WP is still "Planned — milestone N" until the corresponding row below is green.
+This document maps each of the 15 §16 items to (a) the normative rule(s) it realises, (b) the RTL module that owns it, (c) the SVA/formal assertion category that guards it, (d) the reference-model shadow that must agree with it, and (e) its dependency order. It is the entry point for the RTL phase; every §8 claim in the WP is still "Planned — milestone N" until the corresponding row below is green.
 
 ---
 
@@ -196,6 +196,18 @@ No §16 item may be marked green until its SVA category and its reference-model 
 | **Depends on** | none |
 | **Effort** | 1–2 days |
 
+### §16.15 — Same-line INV abort (B6)
+
+| | |
+|---|---|
+| **Normative rule** | §3.3 rule 6 (a same-line INV aborts the outstanding miss); §4.6 Lemma L1 (restated) |
+| **RTL module** | `l1_mesi_ctrl.sv` (the L1 transient FSM) |
+| **Behaviour** | An L1 in `IS_D`, `IM_D` or `SM_D` that receives an INV for the line it is missing on **aborts** that miss: it invalidates its copy, answers INVACK on VC2, and re-issues the access once it holds the line again. The INV is never deferred — deferral deadlocks against the one-outstanding-transaction-per-bank directory (§3.7). |
+| **SVA / formal** | A3.x (message protocol: an aborted request is re-issued); the harness must not drive an UNBLOCK from a requester that has not installed the data |
+| **Reference-model shadow** | the model aborts the pending access on a same-line INV and re-issues it |
+| **Depends on** | §16.1 (forward release) for the transient states it shares |
+| **Effort** | 1–2 days |
+
 ## 3. Effort summary
 
 | Item | Days | Gate |
@@ -214,14 +226,15 @@ No §16 item may be marked green until its SVA category and its reference-model 
 | §16.12 Rule 10 (deferred eviction) | 0.5 | Week 4 |
 | §16.13 Tile-ID tie-off | 0.25 | Week 4 |
 | §16.14 FPGA stimulus source | 1–2 | Week 12 |
-| **Total (baseline, no DMA)** | **~15–18 days** | |
-| **Total (with DMA)** | **~19–23 days** | |
+| §16.15 same-line INV abort (B6) | 1–2 | Week 4 |
+| **Total (baseline, no DMA)** | **~16–20 days** | |
+| **Total (with DMA)** | **~20–25 days** | |
 
 ---
 
 ## 3b. Assertion coverage (honest answer)
 
-Which normative rule is checked by which assertion. Four of the fourteen items have **no direct assertion** in the 42 — they are guarded only by the reference model and the scoreboard, and are the candidates if the assertion set ever grows beyond the fixed 42.
+Which normative rule is checked by which assertion. Four of the fifteen items have **no direct assertion** in the 42 — they are guarded only by the reference model and the scoreboard, and are the candidates if the assertion set ever grows beyond the fixed 42.
 
 | §16 item | Direct assertion? | Coverage |
 |---|---|---|
@@ -239,6 +252,7 @@ Which normative rule is checked by which assertion. Four of the fourteen items h
 | §16.12 Rule 10 (deferred eviction) | **No** | Reference model + scoreboard only |
 | §16.13 Tile-ID tie-off | **No** | Reference model only |
 | §16.14 FPGA stimulus source | **No** | Board-level; not in the 42 |
+| §16.15 Same-line INV abort (B6) | Yes | A3.x (aborted request re-issued), A7.x (FSM legality) |
 
 **No direct assertion:** replacement determinism (§16.8), the deferred-eviction rule (§16.12), the tile-ID tie-off (§16.13). These three plus the exclusive-bit rule's *text* are the candidates if the assertion set ever grows beyond the fixed 42.
 
@@ -256,7 +270,7 @@ Until all three are green, the corresponding §8 claim stays "Planned — milest
 
 ## 5. Notes
 
-- The 130-check verifier (`verify_patch_set.py`) guards the *specification*; it does not guard the RTL. Run it after any WP or LLD edit, including edits made during the RTL phase, because the reference model and the SVA set must move in lockstep with the WP.
+- The 134-check verifier (`verify_patch_set.py`) guards the *specification*; it does not guard the RTL. Run it after any WP or LLD edit, including edits made during the RTL phase, because the reference model and the SVA set must move in lockstep with the WP.
 - The DMA L1-lite FSM (§12 item 10) is the one gated open item that blocks §16.11; it must be specified before the DMA week.
 - The age threshold's empirical value (§12 item 8) and the bank service order (§12 item 9) are deliberately left open; the RTL may choose either, but the choice must be recorded in §3.5 / §3.7 before sign-off.
 - The coverage bin list (§12 item 2) and the *T*-counting mechanism (§12 item 7) are testbench-side and do not block any §16 item.

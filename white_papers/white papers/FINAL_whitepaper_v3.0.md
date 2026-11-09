@@ -96,7 +96,7 @@ UVM [16] is the industry standard for constrained-random verification. pyuvm [17
 
 ### 2.5 Positioning of This Work
 
-Each verification technique above is established prior art individually, and combinations are also known. The contribution claimed is therefore **not novelty of the ingredients** but a specific, falsifiable integration: a 42-assertion SVA set bound to a directory-MESI implementation over a packet-switched 2D mesh, checked against a transaction-level reference model that validates data values, with numeric coverage-closure criteria (§5.4) and a published artifact list (§8, §12). §8 records the predecessor state (zero assertions, state-only checks) as the baseline this improves upon. A related-work delta table against [15]–[18] is a required deliverable of the submission package (§12).
+Each verification technique above is established prior art individually, and combinations are also known. The contribution claimed is therefore **not novelty of the ingredients** but a specific, falsifiable integration: a 42-assertion SVA set bound to a directory-MESI implementation over a packet-switched 2D mesh, checked against a transaction-level reference model that validates data values, with numeric coverage-closure criteria (§5.4) and a published artifact list (§8, §12). §8 records the predecessor state (zero assertions, state-only checks) as the baseline this improves upon. A related-work delta table against [15]–[18] is a required deliverable of the submission package (§12 item 3).
 
 ---
 
@@ -118,6 +118,8 @@ A **CPU tile** is structurally identical across the mesh:
 | 8 | Intra-tile mux | Routes local vs. remote requests; routes incoming packets by message type. **An L1 miss on a line homed at this tile is routed directly to the local L2/directory controller — no NIC or NoC traversal** |
 
 A **DMA device tile** (gated, §3.11) is a structural *variant*, not an identical tile: a core-less DMA engine with two channels and a memory-mapped register file, an L1-lite cache (2 sets × 2 ways × 64 B), a NIC, and a router. It has **no L2 bank, no directory, and no memory tap**. It is a consumer of coherence, not a provider: the directories of the other tiles track its copies exactly as they track an ordinary cache.
+
+**Intra-tile datapath width.** The intra-tile path moves a whole cache line in one 512-bit transfer (`evict_data`, `fill_data`, `l2_wdata`, `mem_wdata`, `tx_data`); the NoC moves the same line as 9 flits. Both widths are fixed by the 64 B line size.
 
 ### 3.2 Cache Hierarchy
 
@@ -159,7 +161,7 @@ A **DMA device tile** (gated, §3.11) is a structural *variant*, not an identica
 | SHARER_W | TILE_COUNT | 4 | 16 | 64 |
 | DIR entry used bits | 3 + TILE_ID_W + N² + 1 | 10 | 24 | 74 |
 
-**Inclusion policy.** The L2 bank is a write-back cache of its home slice. It holds the current value of every home block **except** while the directory is in DIR_M or DIR_FWD_WAIT with a dirty owner, during which the only current copy resides in the owner's L1 and the bank's copy is stale. The L1 is private and is *not* inclusive of the L2; the directory is **non-inclusive bookkeeping only** — it stores state, owner, and sharers, never data. This policy is stated explicitly because "inclusive caches" wording in [6] does not describe this design.
+**Inclusion policy.** The L2 bank is a write-back cache of its home slice. It holds the current value of every home block **except** while the directory is in DIR_M, or in DIR_FWD_WAIT **before** the owner's DATAFWD has been written into the bank; after the DATAFWD the bank holds the current value. During the exception the only current copy resides in the owner's L1 and the bank's copy is stale. The L1 is private and is *not* inclusive of the L2; the directory is **non-inclusive bookkeeping only** — it stores state, owner, and sharers, never data. This policy is stated explicitly because "inclusive caches" wording in [6] does not describe this design.
 
 **Bank access and fill path (resolved ambiguity).** The L2 bank presents a **single serialized access port** to the directory controller: local L1 fills, remote NoC requests and memory-tap fills/write-backs all queue behind it (the service order is not fixed by this specification). On a DIR_MEM_WAIT fill the directory reads the **L2 data array first** and consults the memory tap **only on a bank (tag) miss**, installing the fetched line into the victim way (DIR_EVICT first if a victim is required); PUTM and DATAFWD write dirty data into the bank; DIR_EVICT/WRITE_BACK writes bank to tap. While DIR_M with a dirty owner the bank copy is stale and the owner's L1 is authoritative.
 
@@ -203,7 +205,7 @@ A **DMA device tile** (gated, §3.11) is a structural *variant*, not an identica
 
 The eviction sub-states and the GETS/GETM discriminator required to resolve DIR_FWD_WAIT are held in the **Directory Transaction Record (DTR)** in the L2 controller, not in the SRAM entry (§3.7). **The 3-bit field has zero encoding headroom; any future directory state requires re-layout of the entry.** This is stated as a cost, not hidden.
 
-**Single-exit rule.** Each transient state field has exactly one exit event: DIR_MEM_WAIT, DIR_FWD_WAIT, and DIR_INV_WAIT exit on **UNBLOCK**; DIR_EVICT exits when the victim is fully resolved (final INVACK/PUTM received and any dirty write-back committed) into DIR_MEM_WAIT. Intermediate events (MEM_DATA, DATAFWD, INVACK, PUTM) advance DTR progress counters and sub-state only; they never change the SRAM state field on their own. This makes every directory transient a single-exit state — the property that makes the bounded-liveness proof in §5.3 meaningful, and the property the predecessor's dead `PROXY_WAIT` state violated.
+**Single-exit rule.** DIR_MEM_WAIT, DIR_FWD_WAIT and DIR_INV_WAIT each have exactly one exit event, **UNBLOCK**. DIR_EVICT is entered **only from DIR_MEM_WAIT** (a pending fill that needs a victim way) and exits back to DIR_MEM_WAIT once the victim is fully resolved (final INVACK/PUTM received and any dirty write-back committed), so the fill's UNBLOCK still selects the successor. Intermediate events (MEM_DATA, DATAFWD, INVACK, PUTM) advance DTR progress counters and sub-state only; they never change the SRAM state field on their own. This makes every directory transient a single-exit state — the property that makes the bounded-liveness proof in §5.3 meaningful, and the property the predecessor's dead `PROXY_WAIT` state violated.
 
 **Normative protocol rules:**
 
@@ -214,6 +216,9 @@ The eviction sub-states and the GETS/GETM discriminator required to resolve DIR_
 5. **Response to INV.** An L1 holding the line in S or E sends INVACK. An L1 holding the line in M first sends PUTM (dirty data) and then INVACK, so the count remains one-INV-to-one-INVACK. An L1 in state I receiving an INV responds INVACK unconditionally (defensive rule, formally checked — it covers the evict-during-invalidate race).
 6. **Receptivity (Premise R).** An L1 with an outstanding miss on line *A* must continue to accept and service incoming INV/DATA/INVACK traffic for *other* lines immediately, on a path independent of its miss path. Incoming messages for line *A* itself cannot occur, by Lemma L1 (§4.6).
 7. **UNBLOCK in a stable state is a no-op.** UNBLOCK is required only to release a transient; the directory ignores it in stable states and asserts it is not carrying an unmatched transaction.
+8. **A forward-initiated release is not a replacement eviction.** When an owner downgrades on a forward (E/M→S on FWD_GETS, E/M→I on FWD_GETM) it sends DATAFWD and changes state without sending PUTS/PUTM; rule 2 applies only to replacement evictions. The directory records the release through the forward path (sharer bit / owner field), so no sharer bit is left stale.
+9. **The DATA exclusive bit is 1 only when the requester becomes the sole holder.** It is 1 on a DIR_I grant (GETS or GETM) and on every GETM grant including a forward; it is 0 on every GETS grant including a forward, because a forward of a GETS downgrades the old owner to S. The L1 installs E on DATA(excl=1) and S on DATA(excl=0) (Appendix A), so a wrong exclusive bit places an E copy alongside an S copy and violates A1.3 and A2.6.
+10. **No eviction is started while a miss is outstanding — except the eviction the miss itself requires.** An L1 with an outstanding miss does not begin a **proactive** eviction (a release the tile initiates on its own initiative: a directory recall, or giving up a line it no longer needs); such an eviction is deferred until the miss completes. The **conflict eviction** intrinsic to the pending miss is **not** deferred: if the incoming line's set is full, the L1 releases the PLRU victim **before** it issues the miss request — dirty victim (M) → `PUTM` (VC0, 9 flits) and wait for `PUTACK`; clean victim (S or E) → `PUTS` (VC0, 1 flit, no data); the E case waits for `PUTACK`, the S case does not (rule 9). The victim's release is a **sub-step of the miss transient** — the L1 remains in `IS_D`/`IM_D` and no second transient is opened, so `MI_A`/`EI_A` are entered only for proactive evictions and the one-transient-per-tile model holds without MSHRs. The release and the subsequent `GETS`/`GETM` both travel on **VC0 (REQ)**, so the per-VC FIFO ordering of I4 preserves their order at the source and the home bank processes the release first — the L1 therefore never waits on a directory transaction that is blocked behind its own miss, and the sequence is deadlock-free. MSHRs are future scope (§9).
 
 **Message set — 12 core messages (complete and minimal) + 2 gated DMA messages:**
 
@@ -244,14 +249,14 @@ The eviction sub-states and the GETS/GETM discriminator required to resolve DIR_
 
 | Sequence | Path |
 |---|---|
-| Load miss, line in DIR_I | L1: IS_D, GETS → dir: DIR_MEM_WAIT, L2 bank read first (tap on bank miss) → dir: DATA(excl=0/1) → L1: S or E, UNBLOCK → dir: DIR_S / DIR_E |
+| Load miss, line in DIR_I | L1: IS_D, GETS → dir: DIR_MEM_WAIT, bank-first fill (L2 data array, then the tap on a bank miss) → dir: DATA(excl=0/1) → L1: S or E, UNBLOCK → dir: DIR_S / DIR_E |
 | Store miss, line in DIR_I | L1: IM_D, GETM → dir: DIR_MEM_WAIT → DATA(excl=1) → L1: M, UNBLOCK → dir: DIR_M |
 | Silent upgrade | L1 in E stores: E → M locally, **no message**; the owner's L1 is authoritative for E-versus-M (Appendix B, note 1) |
-| Two readers | dir DIR_S: GETS → reply DATA, add sharer, no transient |
+| Third and later readers | dir DIR_S: GETS → reply DATA, add sharer, no transient (the second reader takes the forward path, see "Forward, clean owner") |
 | Upgrade with invalidation | L1 in S stores: SM_D, GETM → dir DIR_S → clear requester bit, INV to sharers \ {T} → INVACK ×n until Sharers == 0 → DATA(excl=1) → requester M, UNBLOCK → dir DIR_M |
-| Forward, clean owner | dir DIR_E + GETS(other): DIR_FWD_WAIT, FWD_GETS → owner replies DATAFWD to dir → dir writes bank, sends DATA → requester UNBLOCK → dir DIR_S (pending_op = GETS) |
-| Forward, dirty owner | dir DIR_M + GETM(other): DIR_FWD_WAIT, FWD_GETM → owner sends DATAFWD(dirty) to dir → dir updates bank, sends DATA(excl=1) → requester UNBLOCK → dir DIR_M (pending_op = GETM) |
-| L1 clean eviction | L1: EI_A (or S direct), PUTS → dir DIR_E/DIR_S → clear owner/sharer, PUTACK → L1: I |
+| Forward, clean owner | dir DIR_E + GETS(other): DIR_FWD_WAIT, FWD_GETS → owner replies DATAFWD and downgrades E→S → dir writes bank, records owner+requester as sharers, sends DATA → requester UNBLOCK → dir DIR_S (pending_op = GETS). **Committed sharer set (ruling B5):** the set committed on the exit is {requester} ∪ {owner}, minus any tile that has already released the line (a PUTS/PUTM already absorbed by the directory is not added as a sharer). The vector is a conservative superset of the actual holders — a stale bit is permitted only while that tile's release notification is in flight (A2.2b) |
+| Forward, dirty owner | dir DIR_M + GETM(other): DIR_FWD_WAIT, FWD_GETM → owner sends DATAFWD(dirty) and downgrades to I → dir updates bank, clears old owner, sets requester as owner, sends DATA(excl=1) → requester UNBLOCK → dir DIR_M (pending_op = GETM) |
+| L1 clean eviction | L1 in E: EI_A, PUTS → dir DIR_E → clear Owner (and its sharer bit), PUTACK → L1: I; L1 in S: S → I directly, PUTS → dir DIR_S → clear that sharer bit, no PUTACK (a sharer does not wait for one) |
 | L1 dirty eviction | L1: MI_A, PUTM(9) → dir: write bank, clear owner, PUTACK → L1: I |
 | L2 victim, shared | dir DIR_EVICT (sub-state INV_SHARERS): INV to sharers → INVACK ×n → (dirty? WRITE_BACK) → DIR_MEM_WAIT, proceed with fill |
 | L2 victim, owned | dir DIR_EVICT (sub-state RECALL_OWNER): INV to owner → owner sends PUTM (if M) then INVACK → WRITE_BACK → DIR_MEM_WAIT |
@@ -262,7 +267,7 @@ The eviction sub-states and the GETS/GETM discriminator required to resolve DIR_
 
 **Routing.** XY deterministic: X first, then Y. The VC index is assigned at the source NIC from the message class and is **never changed by any router** (VC preservation — this premise is load-bearing for §4.6 Layer 1).
 
-**Flow control.** Credit-based per VC: 4-bit credit counter initialised to the downstream FIFO depth of 4. (3 bits is the minimal sufficient encoding for depth 4; 4 bits is used for interface regularity and headroom if depth increases. The approved LLD fixes the bus at `credit_in/out[3:0]`.) A flit is transmitted only when a credit is available; a credit returns when the downstream FIFO advances. Buffer occupancy is therefore always ≤ depth.
+**Flow control.** Credit-based per VC: 4-bit credit counter initialised to the downstream FIFO depth of 4. (3 bits is the minimal sufficient encoding for depth 4; 4 bits is used for interface regularity and headroom if depth increases. The approved LLD fixes the bus at `credit_in/out[3:0]`.) A flit is transmitted only when a credit is available; a credit returns when the downstream FIFO advances. Buffer occupancy is therefore always ≤ depth. The NIC's TX and RX FIFOs are **4 flits per VC**, matching the router's per-port FIFO depth and the credit depth above, so a full VC's worth of in-flight flits can be absorbed without stalling the upstream link.
 
 **Virtual channels (4 per port):**
 
@@ -280,7 +285,7 @@ The eviction sub-states and the GETS/GETM discriminator required to resolve DIR_
 **Arbitration (two levels, with a bounded-wait escape).**
 
 1. **VC arbitration per input port:** fixed priority by *class* — **RESP > INV > FWD > REQ** — so protocol-critical responses and invalidations are never queued behind request traffic.
-2. **Starvation escape (Premise F):** fixed priority alone is not fair to the most heavily loaded class (every L1 miss injects REQ). Therefore an arbiter **age counter** overrides the fixed order: a VC that has waited ≥ 8 arbitration rounds is granted next. Every VC with pending traffic is thus served within a bound of at most 8 rounds, which is exactly the fairness premise the liveness proof of §5.3 requires. The value 8 is a working value, not a confirmed one — it is sufficient to discharge Premise F (any finite bound does) and is to be confirmed against measured VC load at Week 10 (§12 item 8); a retuned value does not affect the deadlock proof, which is parametric in the bound.
+2. **Starvation escape (Premise F):** fixed priority alone is not fair to the most heavily loaded class (every L1 miss injects REQ). Therefore an arbiter **age counter** overrides the fixed order: a VC that has waited ≥ **5** arbitration rounds is granted next. The age counter is per (input port, VC) and increments once per round while that VC has a flit at the head of its VC FIFO and is not granted; when several VCs qualify, the **oldest counter is granted first**, ties broken by the fixed class priority. **One round is one clock cycle of the router** — every input port's VC arbiter and every output port's switch arbiter arbitrate once per cycle, and all counters and pointers advance once per round. The end-to-end bound is therefore **derived, not asserted**: 5 rounds for the age escape, plus at most 3 further rounds for the other VCs at the same input port (4 VCs per port, §3.5), plus at most 5 further rounds for the output switch arbiter, which is **round-robin across input ports** — the router's ports are LOCAL, N, S, E, W, so at most 5 contenders — giving **5 + 3 + 5 = 13 switch-arbitration rounds**. At a corner tile only 3 ports are active, so the bound there is **5 + 3 + 3 = 11**. Two obligations follow and are normative: **(a)** the output switch arbiter must be *port-granular*; a VC-aware output arbiter (round-robin over input-port × VC pairs, 20 candidates) would make the second term 20 and void the bound — and would contradict the wormhole model, in which the header flit reserves *the* output path; **(b)** the age counter must be per (input port, VC) and the oldest-first tie-break must be implemented, or the "+3" term is lost. 13 rounds ≈ 13 cycles < T = 64 ✓. The value 5 is confirmed by this ruling (§12 item 8); it is to be retuned against measured VC load at Week 10 — a retuned threshold requires re-deriving the bound (T + 3 + 5), and does not affect the deadlock proof, which is parametric in the bound.
 3. **Switch arbitration per output port:** round-robin across input ports, preventing input starvation.
 
 This synthesises the majority position (fixed class priority: Qwen, Mistral, Grok, Gemini, DeepSeek) with the minority objection (REQ starvation under pure fixed priority: MiniMax) — see §13 item H. Deadlock freedom does **not** depend on the arbiter (§4.6); the arbiter choice is a liveness and QoS question.
@@ -311,16 +316,16 @@ The home-tile mapping is **range-based and contiguous**: the tile index is taken
 
 **The L1 set index and the L2 set index are disjoint.** This is a hard requirement, not a preference. The predecessor layout placed the L2 set at [8:6], which *contains* the L1 set [7:6]; for a fixed L1 set only 2 of the 8 L2 sets are then reachable, so one L1 set is backed by 2 × 4 × 64 B = 512 B — less than the 1 KB L1 itself — and conflict behaviour becomes correlated between the two levels. The layout above gives every L1 set access to all 8 L2 sets.
 
-**Tile-ID encoding, numbering, and corner ports.** The home-tile field is the concatenation {X, Y} with X in the higher-order bits and Y in the lower-order bits: for 2×2, X = addr[12], Y = addr[11], so TILE_ID = 2·X + Y and the tile ID equals the home field addr[12:11] directly; for 4×4, X = addr[14:13], Y = addr[12:11], so TILE_ID = 4·X + Y and the tile ID equals addr[14:11] directly. Tile numbering follows: T0 = (X=0, Y=0), T1 = (0,1), T2 = (1,0), T3 = (1,1) for 2×2; T0–T15 for 4×4 in the same {X, Y} order. The X axis runs west→east (X=0 is the west edge); the Y axis runs south→north (Y=0 is the south edge). Corner-tile active ports follow: T0:N,E, T1:S,E, T2:N,W, T3:S,W (LOCAL on every tile). These assignments are normative and match the approved LLD.
+**Tile-ID encoding, numbering, and corner ports.** The home-tile field is the concatenation {X, Y} with X in the higher-order bits and Y in the lower-order bits: for 2×2, X = addr[12], Y = addr[11], so TILE_ID = 2·X + Y and the tile ID equals the home field addr[12:11] directly; for 4×4, X = addr[14:13], Y = addr[12:11], so TILE_ID = 4·X + Y and the tile ID equals addr[14:11] directly. Tile numbering follows: T0 = (X=0, Y=0), T1 = (0,1), T2 = (1,0), T3 = (1,1) for 2×2; T0–T15 for 4×4 in the same {X, Y} order. The X axis runs west→east (X=0 is the west edge); the Y axis runs south→north (Y=0 is the south edge). Corner-tile active ports follow: T0:N,E, T1:S,E, T2:N,W, T3:S,W (LOCAL on every tile). These assignments are normative and match the approved LLD. **Mesh position:** tile T at (X, Y) sits at mesh row Y, column X; X = 0 is the west edge, Y = 0 is the south edge; TILE_ID = N·X + Y. The static TILE_ID input (§5) is tied off to this value at the mesh top level.
 
 **Stored tag widths (corrected decomposition):** the stored tag is *every line-address bit except the index bits and the bits constant per bank*. Line address = addr[31:6].
 
 | Cache | Index | Constant-per-bank | Stored tag | Value (4×4) | Value (2×2) |
 |---|---|---|---|---|---|
 | L1 (every tile) | [7:6] | — | addr[31:8] | 24 b | 24 b |
-| L2 (per bank) | [10:8] | home [14:11] / [12:11] | {addr[31:15], addr[7:6]} / {addr[31:13], addr[7:6]} | **19 b** | **21 b** |
+| L2 (per bank) | [10:8] | home [14:11] / [12:11] | {addr[31:15], addr[7:6]} / {addr[31:13], addr[7:6]} | **19 b address tag + valid + dirty = 21 b** | **21 b address tag + valid + dirty = 23 b** |
 
-Note that the L2 tag is **non-contiguous**: the L1 set bits [7:6] lie *below* the L2 index [10:8] but above the offset, so they are line-identity bits that must be compared. Storing addr[31:15] alone (17 bits) would alias lines differing only in [7:6] into the same L2 way — a correctness bug present in several draft versions (§13 item E). The home bits are excluded because they are constant within a bank; comparing them would be redundant.
+Note that the L2 tag is **non-contiguous**: the L1 set bits [7:6] lie *below* the L2 index [10:8] but above the offset, so they are line-identity bits that must be compared. Storing addr[31:15] alone (17 bits) would alias lines differing only in [7:6] into the same L2 way — a correctness bug present in several draft versions (§13 item E). The home bits are excluded because they are constant within a bank; comparing them would be redundant. **The L2 per-line word carries two state bits in addition to the address tag (N3a, N13): `dirty` and `valid`.** `dirty` = the bank copy is newer than the tap. **On every bank write the dirty bit is set to the dirtiness of the data written** — PUTM and a dirty DATAFWD write dirty data, a clean DATAFWD and a fill from the tap write clean data — and it is cleared when the line is written back to the tap (DIR_EVICT/WRITE_BACK). It is what lets the directory decide whether a DIR_I victim needs a write-back. `valid` distinguishes an empty way from a resident line: an empty way holds an all-zero tag, which would otherwise alias the line at address 0x0000_0000 (the first line of the memory window has an all-zero tag) and produce a false bank hit. The per-line word is therefore `{valid, tag, dirty}` — **23 b at 2×2 and 21 b at 4×4** (21 b / 19 b of address tag plus one bit each). **`valid` and `dirty` are state, not identity: neither participates in the tag comparison or the way select.**
 
 **Parameterisation and the scaling bound.** Every coherence width derives from `TILE_COUNT`. A full-map sharer vector is 1 bit per tile, so the entry grows linearly: 24 bits at 16 tiles, 74 bits at 64 tiles. **A flat full-map single-level directory is optimal only up to 16 tiles; the design is therefore bounded at N ≤ 16.** The tile-ID fields are `TILE_ID_W` bits logical (2 at 2×2, 4 at 4×4), allocated 8 bits physical in the packet header with the high bits reserved zero (§3.8). They do not extend the N ≤ 16 bound — the sharer vector binds first, and an 8-bit header allocation is a layout choice, not a claim of 256-tile support. The claim "scales to hundreds of tiles" is removed. The 32-bit address map with the [14:11] home field accommodates N ≤ 16 without change; N > 16 requires a wider address map *and* a hierarchical or limited-pointer directory (§9).
 
@@ -332,7 +337,7 @@ Because the 3-bit state field is exactly saturated, the following information is
 
 | Field | Width | Meaning |
 |---|---|---|
-| Pending op | 3 b | GETS, GETM, PUT, EVICT, DMA (5 used codes) |
+| Pending op | 3 b | 000 NONE, 001 GETS, 010 GETM, 011 PUT, 100 DMA (5 used codes); 101–111 unused. (The eviction is held in the 2-bit evict sub-state, not in pending_op — the pending fill's GETS/GETM survives the DIR_EVICT excursion, §3.3 single-exit rule) |
 | Pending requester | `TILE_ID_W` | Tile that will receive the grant / release |
 | Evict sub-state | 2 b | NONE, INV_SHARERS, RECALL_OWNER, WRITE_BACK |
 | Evict victim | tag + set + way | Line being resolved when a fill needs a victim way |
@@ -343,7 +348,7 @@ Because the 3-bit state field is exactly saturated, the following information is
 The DTR is the single source of the discriminators the SRAM state field cannot hold:
 
 - **DIR_FWD_WAIT is deterministic.** The pair `(DIR_FWD_WAIT, UNBLOCK)` has two legal successors; `pending_op` selects DIR_S (GETS) or DIR_M (GETM). The transition function is therefore a function, which is a precondition for any equivalence check against a reference model. *(The predecessor's two rows for `(DIR_FWD_WAIT, DATAFWD)` were fatal defect F1.)*
-- **One outstanding transaction per bank.** The DTR implies the bank is blocked while a transient is open; concurrent requests to other lines in that bank queue in the NIC and are the source of the bounded-service requirement in §5.3. This premise is stated explicitly because both the single-exit rule and Lemma L1 depend on it.
+- **One outstanding transaction per bank.** One outstanding **DTR transaction** per bank. A stable-state service needing no transient (DIR_S + GETS) consumes one bank access but does not occupy the DTR. The DTR implies the bank is blocked while a transient is open; concurrent requests to other lines in that bank queue in the **bank's request queue behind the single serialized L2 port** (the NIC does not buffer them) and are the source of the bounded-service requirement in §5.3. This premise is stated explicitly because both the single-exit rule and Lemma L1 depend on it.
 - **No outstanding-ack counter.** Sharer-bit clearing (§3.3 rule 4) subsumes it and is idempotent; a counter would double-decrement on a late PUTS.
 
 ### 3.8 Packet and Flit Format
@@ -357,10 +362,10 @@ The flit is 64 bits. A packet is one header flit followed by zero or more body f
 | [63:56] | Dest tile | 8 physical / `TILE_ID_W` logical | Destination tile ID; low `TILE_ID_W` bits meaningful, high bits reserved zero |
 | [55:48] | Src tile | 8 physical / `TILE_ID_W` logical | Source tile ID; low `TILE_ID_W` bits meaningful, high bits reserved zero |
 | [47:44] | Msg type | 4 | Appendix C |
-| [43:42] | VC ID | 2 | **Checked field**: must equal class(msg); asserted by the NIC and by formal invariant I3, never used as a routing input |
+| [43:42] | VC ID | 2 | **Checked field**: must equal class(msg); asserted by the NIC and by formal invariant I2, never used as a routing input |
 | [41] | Head | 1 | First flit of a packet |
 | [40] | Tail | 1 | Set only on single-flit packets (head = tail = 1) |
-| [39] | Write enable | 1 | Memory/bank write indication |
+| [39] | Write enable | 1 | Memory/bank write indication; on a DATAFWD packet this bit is **dirty** — set iff the owner held the line in M, so the directory knows whether the forwarded data is dirty (N3b, N10) |
 | [38] | Exclusive | 1 | DATA grants exclusive ownership |
 | [37:32] | **Length (LEN)** | **6** | **Total flits in the packet, 1–63** |
 | [31:0] | Address | 32 | Line address of the transaction |
@@ -397,11 +402,11 @@ The backing store is a per-tile behavioural **memory tap**. It is a simulation m
 | Region | Range | Purpose |
 |---|---|---|
 | Memory | 0x0000_0000 – 0x0FFF_FFFF | 256 MB backing store |
-| Unmapped | 0x1000_0000 – 0xEFFF_FFFF | Reserved; A8 catches access |
-| DMA registers | 0xF000_0000 – 0xF000_FFFF | DMA control window (gated) |
+| Unmapped | 0x1000_0000 – 0xEFFF_FFFF, and 0xF001_0000 – 0xFFFF_EEFF | Reserved; A8 catches access |
+| DMA registers | 0xF000_0000 – 0xF000_FFFF | DMA control window (gated); with the DMA gate failed this range is unmapped (A8 catches) |
 | Test addresses | 0xFFFF_FF00 / FF04 / FF08 | Return 0xDEADBEEF / the address / a counter |
 
-The tap has two roles: it answers its L2 bank's **cold (bank tag) misses** and **write-backs** (DIR_MEM_WAIT fill on a bank miss, DIR_EVICT WRITE_BACK), and it is accessed **only by the L2/directory controller**. It is **not on the network datapath**: the NIC connects directly to the router LOCAL port; the earlier wording that the tap "also passes non-memory packets to and from the NIC" is superseded. Because coherence guarantees exactly one dirty copy per line, the home tap always holds the authoritative value for its home addresses once a line is not in DIR_M.
+The tap has two roles: it answers its L2 bank's **cold (bank tag) misses** and **write-backs** (DIR_MEM_WAIT fill on a bank miss, DIR_EVICT WRITE_BACK), and it is accessed **only by the L2/directory controller**. It is **not on the network datapath**: the NIC connects directly to the router LOCAL port; the earlier wording that the tap "also passes non-memory packets to and from the NIC" is superseded. Because coherence guarantees exactly one dirty copy per line, the **bank** — not the tap — holds the current value for its home addresses: it is current except in DIR_M / DIR_FWD_WAIT with a dirty owner (§3.2); the tap is authoritative only for lines that are not resident in the bank. A DIR_E entry whose owner has silently upgraded to M is not an exception to this rule — the owner's L1 is authoritative in that case and the bank is refreshed on a forward (DATAFWD) or on eviction (PUTM, see Appendix B `DIR_E | PUTM`).
 
 ### 3.10 Ordering and Consistency Contract
 
@@ -413,10 +418,13 @@ The practical consequence: a multithreaded program must not assume that writes t
 
 **Status: not part of the baseline.** The DMA device tile is adopted only if the Month-2 gate is passed (§7.1, Week 8): 4×4 mesh simulated clean, pyuvm regression green, all formal safety properties discharged, and one end-to-end DMA transfer passing simulation. If the gate fails, DMA moves to §9, codes 1100–1101 revert to *Reserved* and are not reassigned, and no RTL change is required.
 
+**Scope: 4×4 only (ruling B4).** The DMA tile is the 16th tile of a 4×4 mesh; the committed 2×2 FPGA build has no DMA tile, no DMA home code and no DMA sharer arithmetic, and the DTR's `pending_op = DMA` code (100) is unreachable in the 2×2 build. The DMA track is evaluated against the Week-8 gate on the 4×4 configuration only.
+
 When active:
 
 - **Structure:** device tile with a two-channel DMA engine, memory-mapped registers, L1-lite (2 × 2 × 64 B), NIC, router; **no L2 bank, no directory, no memory tap**.
-- **Coherence:** standard MESI via the existing 12 core messages plus DMA_WRITE and DMA_ACK; **no new directory states**, because DMA requests map onto existing paths (a DMA read is a GETS; a DMA write maps onto the GETM path with inline data).
+- **Coherence:** standard MESI via the existing 12 core messages plus DMA_WRITE and DMA_ACK; **no new directory states**, because DMA requests map onto existing paths (a DMA read is a GETS; a DMA write maps onto the GETM path with inline data). **DMA_WRITE is serviced by the directory exactly as a GETM is:** if the line is owned, DIR_FWD_WAIT with a FWD_GETM to the owner; if it is shared, DIR_INV_WAIT to invalidate the sharers; the DMA tile's copy is tracked by its sharer bit and by the DMA pending-op code, and the directory replies DMA_ACK on completion. The DMA L1-lite holds at most one outstanding transaction per channel.
+- **DMA L1-lite.** The DMA tile's L1-lite is a coherence consumer with the same receive path as a CPU L1: it accepts INV (replies INVACK), FWD_GETS/FWD_GETM (replies DATAFWD, dirty per header bit 39) and DATA, and it holds at most one outstanding transaction per channel. **Ordering.** The owner's write-back (DATAFWD or PUTM) is committed to the bank **before** the DMA's inline data is written, so the DMA's data is the final value in the bank. The L1-lite's own FSM is a gated open item (§12 item 10).
 - **Tile slot cost:** 4×4 → 15 CPU tiles + 1 DMA tile = 15 L2 banks = 30 KB; the 16-bit sharer vector is exactly saturated (15 CPU L1s + 1 DMA L1-lite); one home code is reserved (§3.6).
 - **Register map (per channel):** SRC_LO 0x00, DST_LO 0x04, LEN 0x08 (must be 64 in baseline), CTRL 0x0C, STATUS 0x10, COUNT 0x14.
 - **Directed tests 18–22 are conditional on the gate.**
@@ -514,9 +522,9 @@ These figures are derived, not estimated: an *n*×*n* mesh has 2*n*(*n*−1) int
 | L1 replacement | Tree-PLRU, 3 b/set | 12 b/tile; at 4 ways the hit-rate delta vs. true LRU is ~1 %, immaterial at 1 KB; one policy for both levels keeps the reference model and assertions single-sourced (§13 item J) |
 | L2 replacement | Tree-PLRU, 3 b/set | 24 b/bank; deterministic; exact policy stated (not generic "pseudo-LRU") to prevent implementer ambiguity |
 | Write policy | Write-back, write-allocate | Standard for coherent caches; makes the silent E→M upgrade meaningful |
-| Total LRU state | 16 × 12 b + 16 × 24 b = 576 b at the baseline 4×4 (540 b with the DMA tile: 15 CPU tiles + 15 banks) | Registers, not memory |
+| Total LRU state | 4×4 baseline: 16 × 12 b + 16 × 24 b = 576 b; 4×4 with DMA: 15 × 12 b + 15 × 24 b = 540 b; 2×2 FPGA: 4 × 12 b + 4 × 24 b = 144 b | Registers, not memory |
 
-Tree-PLRU at 4 ways is a 3-node binary tree: 3 bits per set record which subtree was accessed least recently. The alternative — true LRU (minimum 5 bits/set by ⌈log₂4!⌉, 6 for a pairwise scheme, 8 with age counters) — was proposed by three drafts; it is rejected here on specification-uniformity grounds, not area grounds, and the counter-argument is recorded in §13 item J.
+Tree-PLRU at 4 ways is a 3-node binary tree: 3 bits per set record which subtree was accessed least recently. **Update rule:** on a hit in way w, the 3-bit tree is updated so w's subtree becomes most-recently-used; the victim is the way in the least-recently-used subtree, lower-numbered way on a tie. The alternative — true LRU (minimum 5 bits/set by ⌈log₂4!⌉, 6 for a pairwise scheme, 8 with age counters) — was proposed by three drafts; it is rejected here on specification-uniformity grounds, not area grounds, and the counter-argument is recorded in §13 item J.
 
 ### 4.5 Virtual Channel Assignment
 
@@ -549,7 +557,7 @@ Under credit-based flow control the receiver's buffer occupancy never exceeds it
 
 **Premise R (receptivity).** An L1 with an outstanding miss on line *A* continues to accept and service INV, DATA, and INVACK traffic for other lines; its snoop-response path is independent of its miss path and consumes no miss-handling slot. The L1 supports at most one outstanding miss (MSHRs are future scope), which bounds the formal state space.
 
-**Premise F (fairness).** Every VC with pending traffic is served within at most 8 arbitration rounds (§3.5 escape counter), and the fabric delivers transmitted flits. Liveness is claimed *under* this premise; without it, strict priority would permit REQ starvation and the liveness properties of §5.3 would be false.
+**Premise F (fairness).** Every VC with pending traffic is served within at most **13** arbitration rounds (§3.5: a round is one router clock cycle; the bound is derived as 5 rounds of age escape at the input port, plus at most 3 further rounds for the other VCs at the same input port, plus at most 5 further rounds of output-port round-robin across the router's ≤5 input ports; the output switch arbiter is port-granular, not VC-aware), and the fabric delivers transmitted flits. Liveness is claimed *under* this premise; without it, strict priority would permit REQ starvation and the liveness properties of §5.3 would be false.
 
 **Lemma L1 (no same-line message during a transient).** No L1 receives a message for a line on which it has an outstanding miss, other than the DATA that completes it. Proof sketch: (i) the directory blocks its bank until UNBLOCK (single outstanding transaction per bank, §3.7), so no second transaction for that line can be launched; (ii) INV excludes the requester (§3.3 rule 3); (iii) a forward cannot be issued for a line whose directory transient is open. The defensive rules (I + INV → INVACK) cover the residual evict-during-invalidate race and are formally checked.
 
@@ -573,7 +581,7 @@ Three techniques are used and are not conflated: directed tests for expected cas
 | 6 | Sharing (two readers) | DIR_E → DIR_FWD_WAIT → DIR_S, sharer tracking |
 | 7 | Upgrade with invalidation | DIR_S → DIR_INV_WAIT → DIR_M; multi-INVACK completion (≥3 tiles) |
 | 8 | Forward from remote owner | DIR_E and DIR_M paths; owner write-back before serving the forward |
-| 9 | L1 clean eviction (S/E) | PUTS → PUTACK; sharer/owner bit cleared |
+| 9 | L1 clean eviction (S/E) | PUTS → (E only) PUTACK; sharer/owner bit cleared; the S case takes no PUTACK |
 | 10 | L1 dirty eviction (M) | MI_A → PUTM → PUTACK → I |
 | 11 | L2 eviction of a shared victim | DIR_EVICT/INV_SHARERS → multi-INVACK → resume fill |
 | 12 | L2 eviction of an owned dirty victim | DIR_EVICT/RECALL_OWNER → PUTM + INVACK → WRITE_BACK → fill |
@@ -620,22 +628,24 @@ Principal properties:
 | A1.4 | M excludes all others | Safety | If any L1 is in M, every other L1 is invalid for that line |
 | A1.5 | Shared data equality | Safety | All S copies hold identical data |
 | A2.1 | DIR_I ⟺ unheld | Safety | DIR_I iff no L1 holds the line |
-| A2.2 | Sharer accuracy | Safety | DIR_S ⟹ sharers equal the S-mask exactly (no stale bits) |
+| A2.2 | Sharer accuracy | Safety | Two clauses (ruling B5). **A2.2a — no missing bits:** DIR_S ⟹ every tile holding the line in S has its sharer bit set; this direction is strict and is what prevents two writers on one line. **A2.2b — bounded extra bits:** a sharer bit may remain set for a tile that has released the line **only while that tile's release notification (PUTS/PUTM) is in flight toward the home tile**, and it must clear within the bounded window *T* = 64 cycles (§5.3). The directory's sharer vector is a conservative **superset** of the actual holders, never a subset. One assertion ID, two clauses — the §4.6 assertion count is unchanged. **Note (ruling B5):** A2.2a is **vacuously true while no tile holds the line in S** — for example when every candidate tile is mid-miss (`L1_SM_D`) — so this property constrains the sharer vector's *accuracy*, not the directory's behaviour during a mid-miss window. That separate question is open item 12 (§12 item 12). |
 | A2.3 | Owner validity | Safety | DIR_E/DIR_M ⟹ exactly one holder, equal to Owner, Owner < TILE_COUNT |
 | A2.4 | DIR_I ⟹ empty | Safety | DIR_I ⟹ sharers = 0 and valid = 0 |
 | A2.5 | Owner qualification | Safety | Owner is consulted only in DIR_E/DIR_M; in all other states Owner is ignored and must not be read by the RTL |
 | A2.6 | Owner ∈ sharers | Safety | DIR_E/DIR_M ⟹ Owner < TILE_COUNT and sharers = {Owner} |
-| A2.7 | Transient well-formedness | Safety | A DIR_*_WAIT entry ⟹ valid = 1 and DTR.pending_op holds one of the five used codes of §3.7 |
+| A2.7 | Transient well-formedness | Safety | A DIR_*_WAIT entry ⟹ valid = 1 and DTR.pending_op ≠ NONE |
 | A3.x | Message protocol | Safety | Every request is answered; no response without a request; correct destination |
 | A4.x | Flow control | Safety | 0 ≤ credit ≤ FIFO depth; no transmission at credit 0; no flit loss or duplication |
-| A6.x | Data integrity | Safety | Write-then-read returns the written value; home bank current whenever any L1 holds the line in S or E and no DIR_M is open |
+| A6.x | Data integrity | Safety | Write-then-read returns the written value; home bank current whenever any L1 holds the line in S or E and no DIR_M is open; tap current whenever the line is not resident in the bank |
 | A7.x | FSM legality | Safety | No illegal transition; each transient exits only via its defined event |
 | A8.x | Address/routing | Safety | Correct home tile; XY turn order; A8.4 rejects the reserved DMA home code |
-| I1–I7 | Network invariants | Safety | XY path correctness; `flit.VC == class(flit.msg)`; credit invariant; per-VC FIFO ordering; delivery or protocol termination |
+| I1–I7 | Network invariants | Safety | XY path correctness; `flit.VC == class(flit.msg)`; credit invariant (including no transmission at zero credit); per-VC FIFO ordering; delivery or termination; VC preservation (no router rewrites the header VC); inter-class edge ascent (every inter-class causal edge ascends in rank) |
 
-*The safety subsets A1.x, A2.x, A3.x, A4.x, A6.x, A7.x and A8.x are additionally **proved formally** by BMC, and A5.x as bounded liveness under Premise F (§5.3, Appendix E); all 42 are also **bound in simulation**. "Checked in simulation" and "proved formally" are kept distinct — the seven network invariants I1–I7 are formal-only and not simulation-bound — the predecessor had zero assertions.*
+*The A1.x, A2.x, A3, A4, A6, A7 and A8 subsets are proved formally (§5.3, Appendix E); A5 is proved as bounded liveness in the same campaign. All 42 are additionally checked in simulation. "Checked in simulation" and "proved formally" are kept distinct throughout — the predecessor had zero assertions.*
 
-*Bookkeeping: the **42 bound SVA** are exactly the eight categories A1–A8 (5+7+6+8+4+4+4+4). The seven **network invariants I1–I7** (XY path correctness, `flit.VC == class(flit.msg)`, credit invariant, no transmission at zero credit, per-VC FIFO ordering, delivery-or-termination) are **formal-only properties proved in SymbiYosys** and are not part of the 42-item simulation-bound set — 42 + 7 = 49 properties in total. Any report that claims "42 assertions" must not silently include I1–I7, and any report that claims "49" must say so.*
+*Bookkeeping: the **42 bound SVA** are exactly the eight categories A1–A8 (5+7+6+8+4+4+4+4). The seven **network invariants I1–I7** (XY path correctness; `flit.VC == class(flit.msg)`; credit invariant, including no transmission at zero credit; per-VC FIFO ordering; delivery-or-termination; VC preservation — no router rewrites the header VC; inter-class edge ascent — every inter-class causal edge ascends in rank) are **formal-only properties proved in SymbiYosys** and are not part of the 42-item simulation-bound set — 42 + 7 = 49 properties in total. Any report that claims "42 assertions" must not silently include I1–I7, and any report that claims "49" must say so.*
+
+Numbered: I1 XY path correctness; I2 `flit.VC == class(flit.msg)`; I3 credit invariant (no transmission at zero credit); I4 per-VC FIFO ordering; I5 delivery-or-termination; I6 VC preservation; I7 inter-class edge ascent.
 
 ### 5.3 Formal Verification (SymbiYosys)
 
@@ -664,7 +674,7 @@ The uncovered scenarios are covered by the directed and constrained-random campa
 |---|---|
 | No orphan transient | Every transient state field exits within **T** cycles |
 | No message loss | Every request receives a response within **T** cycles |
-| Bounded service | Every VC with pending traffic is served within 8 arbitration rounds (Premise F) |
+| Bounded service | Every VC with pending traffic is served within 13 arbitration rounds (Premise F) |
 
 **Derivation of *T*.** The longest coherence transaction is GETM → INV → INVACK → DATA → UNBLOCK: five fabric traversals. Worst-case Manhattan distance is 2 hops at 2×2 and 6 hops at 4×4; the router pipeline is 4 cycles/hop.
 
@@ -684,7 +694,7 @@ The uncovered scenarios are covered by the directed and constrained-random campa
 | Reference model | **Transaction-level** Python model of MESI directory coherence |
 | Coverage collector | Functional coverage |
 
-**Reference model: transaction-level, not cycle-accurate.** It processes transactions in order, computes the correct state *and data* after each, and hands the result to the scoreboard. Shadow structures: per tile/set/way L1 state, tag, MESI state, data; per bank/set/way L2 state, tag, data, directory entry; a global address→data memory map; a set of outstanding transactions used to detect lost messages. Timing and protocol-ordering defects are caught by the SVA set and the formal proofs, not by the model. A cycle-accurate model would duplicate the RTL effort and must be re-synchronised with every RTL change — the reason the "cycle-accurate" claim of the predecessor drafts is corrected (§13 item D).
+**Reference model: transaction-level, not cycle-accurate.** It processes transactions in order, computes the correct state *and data* after each, and hands the result to the scoreboard. Shadow structures: per tile/set/way L1 state, tag, MESI state, data; per bank/set/way L2 state, tag, **dirty bit**, data, directory entry; a global address→data memory map **that is the home tap**: it is updated only on a write-back (DIR_EVICT/WRITE_BACK), and a bank-resident line is authoritative at the bank (§3.9). A set of outstanding transactions used to detect lost messages. Timing and protocol-ordering defects are caught by the SVA set and the formal proofs, not by the model. A cycle-accurate model would duplicate the RTL effort and must be re-synchronised with every RTL change — the reason the "cycle-accurate" claim of the predecessor drafts is corrected (§13 item D).
 
 **Scoreboard compares after every transaction:** L1 state, L1 data, L2 state, L2 data, directory state, directory owner, directory sharers, memory contents.
 
@@ -706,7 +716,7 @@ The uncovered scenarios are covered by the directed and constrained-random campa
 | State × message cross (4×4 simulation) | 100 % of the per-agent cross |
 | Unreachable bins | Waived with written justification |
 
-**Cross space is defined per agent, not per tile:** (9 L1 states × 14 messages) + (8 directory states × 14 messages) = 126 + 112 = **238 cross terms**, of which the legal subset is the closure target; with the DMA gate closed (12 active messages) the baseline cross is (9 + 8) × 12 = **204 terms**. Crossing the tile dimension (×16 → 3 808) is neither required by the stated properties nor tractable, and is therefore out of scope by construction rather than by accident.
+**Cross space is defined per agent, not per tile:** (9 L1 states × 14 messages) + (8 directory states × 14 messages) = 126 + 112 = **238 cross terms**, of which the legal subset is the closure target. Crossing the tile dimension (×16 → 3 808) is neither required by the stated properties nor tractable, and is therefore out of scope by construction rather than by accident.
 
 ### 5.5 Regression
 
@@ -729,6 +739,7 @@ Directed tests + pyuvm random tests + the bound SVA set + formal proofs run on e
 | Clock | 100 MHz (10 ns) |
 | Committed configuration | **2×2 mesh** |
 | Simulation configuration | 4×4 mesh |
+| Stimulus source | The on-board JTAG bridge; ILA/VIO debug infrastructure is future scope (§9) |
 
 **Resource budget for 2×2 (first-order estimate; synthesis must confirm):**
 
@@ -736,7 +747,7 @@ Directed tests + pyuvm random tests + the bound SVA set + formal proofs run on e
 |---|---|---|---|---|
 | LUTs | 53,200 | ≤ 20,000 (38 %) | ≤ 40,000 (75 %) | Medium |
 | FFs | 106,400 | ≤ 25,000 (24 %) | ≤ 50,000 (47 %) | Low |
-| BRAM36 | 140 | ≤ 48 (34 %) | ≤ 70 (50 %) | Low–Medium |
+| BRAM36 | 140 | ≤ 48 (34 %) | ≤ 80 (57 %) | Low–Medium |
 | DSP | 220 | 0 | 0 | None (no multipliers inferred) |
 
 **BRAM arithmetic (corrected).** A BRAM36 configures as 1024×36 or **512×72**, so a 2 KB bank (32 lines × 64 B) is **one** BRAM36 with a single 64-bit port, 4 with four parallel way ports, or 8 for a full 512-bit line read. The inherited figure of "15 BRAMs per bank", obtained by dividing 512 bits by the 36-bit width, ignores the 72-bit configuration *and* the array depth, and overstates the data array by 2–15×.
@@ -746,7 +757,7 @@ Directed tests + pyuvm random tests + the bound SVA set + formal proofs run on e
 | L1 data (16 lines × 64 B) | 1 – 4 |
 | L1 tag (16 × 24 b) | 0 – 1 (LUTRAM-capable) |
 | L2 data (32 lines × 64 B) | 1 – 8 |
-| L2 tag (32 × 21 b) | 0 – 1 (LUTRAM-capable) |
+| L2 tag (32 × 23 b, = valid + 21 b address tag + dirty) | 0 – 1 (LUTRAM-capable) |
 | Directory (32 × 32 b) | 1 |
 | Router input FIFOs (5 ports × 4 VCs × 4 × 64 b) | 3 |
 | NIC FIFOs | 1 – 2 |
@@ -757,8 +768,6 @@ Directed tests + pyuvm random tests + the bound SVA set + formal proofs run on e
 |---|---|---|
 | 2×2, 4 CPU tiles | 28 | 80 |
 | 4×4, 16 CPU tiles | 112 | 320 |
-
-*The conservative mapping at 2×2 (80) exceeds the ≤ 70 BRAM36 planning ceiling in the table above; the ceiling assumes the favourable mapping (28). The conservative figure is a disclosed worst case, not the plan.*
 
 **LUT estimate.** Router ≈ 2 200–2 500 LUTs (5×5 crossbar ≈ 1 600, VC allocation/arbitration ≈ 400, control ≈ 200); L1/L2/directory controller ≈ 700 per tile; NIC ≈ 300 per tile.
 
@@ -835,10 +844,10 @@ An XDC file is a named deliverable (§7.2 milestone 10). Its absence is one of t
 | 1 | 3–4 | 2-tile mesh; directed tests 1–10 |
 | 2 | 5–6 | 4×4 mesh, virtual channels, PUTACK path, PUTS 1-flit validation |
 | 2 | 7–8 | pyuvm environment + transaction-level reference model; **DMA gate decision at Week 8 exit** |
-| 3 | 9–10 | Formal properties (BMC + k-induction), 42-assertion SVA set bound and running |
-| 3 | 11–12 | Formal proofs pass (milestone 8); FPGA 2×2 synthesis started |
-| 4 | 13–14 | XDC authored, timing closure, bitstream on ZedBoard, resource budget (milestones 9–11); coverage closure |
-| 4 | 15–16 | White paper finalisation and documentation (milestone 12), paper draft, related-work delta table, IEEE submission |
+| 3 | 9–10 | SVA set running in simulation (assertions bound) |
+| 3 | 11–12 | Formal proofs passing (BMC + k-induction) |
+| 4 | 13–14 | FPGA bitstream on ZedBoard; XDC authored; timing closed; resource budget confirmed by synthesis |
+| 4 | 15–16 | Coverage closure, documentation, white paper finalised, related-work delta table, IEEE submission |
 
 ### 7.2 Milestones
 
@@ -986,6 +995,12 @@ The same standard this document applies to the predecessor is applied to itself:
 | IS_D | DATA (shared) | S | Install, send UNBLOCK (VC2) |
 | IS_D | DATA (exclusive) | E | Install, send UNBLOCK (VC2) |
 | I | Store miss | IM_D | Send GETM (VC0) |
+| I | Load miss, victim in M (conflict) | IS_D | Release the victim first: send `PUTM` (VC0, 9 flits) with the dirty line; the `GETS` is **not** sent until `PUTACK` (rule 10) |
+| I | Store miss, victim in M (conflict) | IM_D | Release the victim first: send `PUTM` (VC0, 9 flits) with the dirty line; the `GETM` is **not** sent until `PUTACK` (rule 10) |
+| I | Load or store miss, victim in S or E (conflict) | IS_D / IM_D | Release the victim first: send `PUTS` (VC0, 1 flit, no data); the E case waits for `PUTACK`, the S case does not (rules 9, 10) |
+| IS_D | Victim released (`PUTACK`, or immediately for an S victim) | IS_D | Issue the `GETS` (VC0) — the miss request follows the release on VC0 |
+| IM_D | Victim released (`PUTACK`, or immediately for an S victim) | IM_D | Issue the `GETM` (VC0) |
+| IS_D / IM_D | FWD_GETS/FWD_GETM received (VC1) | unchanged | Send `INVACK` (VC2) — the victim's release has already been sent and carries the data obligation, exactly as in `MI_A`/`EI_A` (N12) |
 | IM_D | DATA (exclusive) | M | Install, write, send UNBLOCK (VC2) |
 | S | Store hit | SM_D | Send GETM (VC0) |
 | SM_D | DATA (exclusive) | M | Write the store data, send UNBLOCK (VC2). INVACKs go to the directory and are never an exit condition here |
@@ -999,7 +1014,14 @@ The same standard this document applies to the predecessor is applied to itself:
 | E | INV received | I | Send INVACK (VC2) |
 | M | INV received | I | Send PUTM (dirty data), then INVACK (VC2) |
 | I | INV received | I | Send INVACK (VC2) — defensive; covers evict-during-invalidate |
-| any | INV/DATA/INVACK for a **different** line | unchanged | Serviced immediately (Premise R); does not disturb the outstanding miss |
+| E | FWD_GETS received (VC1) | S | Send DATAFWD (clean data) to the home directory; downgrade E→S; the owner becomes a sharer |
+| M | FWD_GETS received (VC1) | S | Send DATAFWD (dirty data) to the home directory; downgrade M→S; the owner becomes a sharer |
+| E | FWD_GETM received (VC1) | I | Send DATAFWD (clean data) to the home directory; downgrade to I (ownership transfer) |
+| M | FWD_GETM received (VC1) | I | Send DATAFWD (dirty data) to the home directory; downgrade to I (ownership transfer) |
+| I | FWD_GETS/FWD_GETM received (VC1) | I | Send INVACK (VC2) — defensive; covers the evict-during-forward race (N5) |
+| EI_A | FWD_GETS/FWD_GETM received (VC1) | EI_A | Send INVACK (VC2) — the owner has already released the line (PUTS sent) and is awaiting its PUTACK; the directory treats this as a duplicate release and ignores it (N12) |
+| MI_A | FWD_GETS/FWD_GETM received (VC1) | MI_A | Send INVACK (VC2) — the owner has already sent PUTM, which carries the dirty line and satisfies the forward's data obligation; the directory treats this as a duplicate release (N12) |
+| any | INV/DATA/INVACK/FWD for a **different** line | unchanged | Serviced immediately (Premise R); does not disturb the outstanding miss |
 | any transient | timeout > *T* | error | A5 / test 17: orphan-transient detection |
 
 ### B. Directory State Transitions
@@ -1008,25 +1030,29 @@ Each transient **state field** has exactly one exit event (§3.3); intermediate 
 
 | Current | Event | Action | Next |
 |---|---|---|---|
-| DIR_I | GETS | Enter DIR_MEM_WAIT; `pending_op = GETS`; read the L2 bank first, tap only on a bank miss | **DIR_E** on UNBLOCK (sole-copy clean grant enables silent upgrade) |
+| DIR_I | GETS | Enter DIR_MEM_WAIT; `pending_op = GETS`; fetch bank-first (L2 data array, then the tap on a bank miss) | **DIR_E** on UNBLOCK (sole-copy clean grant enables silent upgrade) |
 | DIR_I | GETM | Enter DIR_MEM_WAIT; `pending_op = GETM`; fetch | **DIR_M** on UNBLOCK |
 | DIR_MEM_WAIT | MEM_DATA | Send DATA to the requester | — (awaiting UNBLOCK) |
 | DIR_S | GETS | Reply DATA (no transient); add sharer | DIR_S |
 | DIR_S | GETM from *T* | Enter DIR_INV_WAIT; clear *T*'s bit; send INV to sharers \ {*T*} | **DIR_M** on UNBLOCK (owner = *T*) |
 | DIR_INV_WAIT | INVACK | Clear that sharer's bit (idempotent) | — |
 | DIR_INV_WAIT | Sharers == 0 | Send DATA (exclusive) to the requester | — (awaiting UNBLOCK) |
-| DIR_E | GETS, requester = owner | Reply DATA from the home bank | DIR_E |
-| DIR_E | GETS, other | Enter DIR_FWD_WAIT; `pending_op = GETS`; send FWD_GETS | **DIR_S** on UNBLOCK |
-| DIR_E | GETM, other | Enter DIR_FWD_WAIT; `pending_op = GETM`; send FWD_GETM | **DIR_M** on UNBLOCK |
+| DIR_E | GETS, requester = owner | Reply DATA from the home bank (bank is current: an owner that silently upgraded to M cannot issue a GETS while still holding the line) | DIR_E |
+| DIR_E | GETS, other | Enter DIR_FWD_WAIT; `pending_op = GETS`; send FWD_GETS; the old owner downgrades E/M→S; directory records old owner + requester as sharers, except a tile that has already released the line is not recorded as a sharer (ruling B5 — the vector stays a conservative superset of the actual holders, never a subset) | **DIR_S** on UNBLOCK |
+| DIR_E | GETM, other | Enter DIR_FWD_WAIT; `pending_op = GETM`; send FWD_GETM; the old owner downgrades to I; directory clears old owner's sharer bit and sets Owner = requester | **DIR_M** on UNBLOCK |
+| DIR_E | PUTM (owner) | Owner silently upgraded to M then evicted: write data into the home bank; clear Owner (and its sharer bit); send PUTACK | DIR_I |
 | DIR_M | GETS, requester = owner | Reply DATA (owner is authoritative) | DIR_M |
-| DIR_M | GETS, other | Enter DIR_FWD_WAIT; `pending_op = GETS`; send FWD_GETS | **DIR_S** on UNBLOCK (after DATAFWD update) |
-| DIR_M | GETM, other | Enter DIR_FWD_WAIT; `pending_op = GETM`; send FWD_GETM | **DIR_M** on UNBLOCK (ownership transfer) |
-| DIR_FWD_WAIT | DATAFWD | Write dirty data into the home bank; send DATA to the requester | — (awaiting UNBLOCK; `pending_op` selects the successor) |
-| DIR_E | PUTS (owner) | Clear Owner; send PUTACK | DIR_I |
-| DIR_S | PUTS (sharer) | Clear that sharer bit; send PUTACK | DIR_S (or DIR_I if no sharers remain) |
-| DIR_M | PUTM (owner) | Write data into the home bank; clear Owner; send PUTACK | DIR_I |
+| DIR_M | GETS, other | Enter DIR_FWD_WAIT; `pending_op = GETS`; send FWD_GETS; the old owner downgrades M→S; directory records old owner + requester as sharers, except a tile that has already released the line is not recorded as a sharer (ruling B5 — the vector stays a conservative superset of the actual holders, never a subset) | **DIR_S** on UNBLOCK (after DATAFWD update) |
+| DIR_M | GETM, other | Enter DIR_FWD_WAIT; `pending_op = GETM`; send FWD_GETM; the old owner downgrades to I; directory clears old owner's sharer bit and sets Owner = requester | **DIR_M** on UNBLOCK (ownership transfer) |
+| DIR_FWD_WAIT | DATAFWD | Write dirty data into the home bank; send DATA to the requester (Owner/sharer update is committed on the exit transition selected by `pending_op`) | — (awaiting UNBLOCK; `pending_op` selects the successor) |
+| DIR_FWD_WAIT | PUTM (owner) | Owner evicted concurrently with the forward: the PUTM carries the dirty line and therefore satisfies the forward's data obligation — write the data into the bank, set the bank dirty bit, clear the old owner's sharer bit (the owner released the line instead of downgrading) and, for pending_op = GETM, set Owner = requester; send PUTACK to release the owner (MI_A → I); continue awaiting UNBLOCK (N5, N12) | — (awaiting UNBLOCK) |
+| DIR_FWD_WAIT | PUTS (owner) | Owner (a clean DIR_E owner) released the line before the forward was served: the bank holds the current value, so cancel the forward — clear the old owner's sharer bit, send PUTACK to release the owner (EI_A → I), and serve the requester from the bank; the pending UNBLOCK still selects DIR_S (N12) | — (awaiting UNBLOCK) |
+| DIR_FWD_WAIT | INVACK (defensive) | The owner had already released the line and answered the forward with the defensive INVACK: this is a duplicate release, not new information — ignore it and change no state; the owner's PUTS or PUTM is what resolves the forward, and the two travel on different VCs, so they may arrive in either order (N12) | unchanged |
+| DIR_E | PUTS (owner) | Clear Owner (and its sharer bit); send PUTACK | DIR_I |
+| DIR_S | PUTS (sharer) | Clear that sharer bit; **no PUTACK** — a sharer evicted from S does not wait for one (Appendix A: S → I directly) | DIR_S (or DIR_I if no sharers remain) |
+| DIR_M | PUTM (owner) | Write data into the home bank; clear Owner (and its sharer bit); send PUTACK | DIR_I |
 | DIR_INV_WAIT / DIR_EVICT | PUTS from a tile already INV'd | Ignore the state change; the bit is already clear | unchanged (INVACK still arrives; idempotent) |
-| any | Fill requires a victim | Enter DIR_EVICT; `evict_sub-state = INV_SHARERS` (victim shared) or `RECALL_OWNER` (victim owned) | — |
+| DIR_MEM_WAIT | Fill requires a victim | Enter DIR_EVICT; `evict_sub-state = INV_SHARERS` (victim shared), `RECALL_OWNER` (victim owned), or `WRITE_BACK` (victim DIR_I with a dirty bank line) | — |
 | DIR_EVICT / INV_SHARERS | Final INVACK | If dirty → WRITE_BACK, else → resolved | — |
 | DIR_EVICT / RECALL_OWNER | PUTM + INVACK from owner | WRITE_BACK | — |
 | DIR_EVICT / WRITE_BACK | Memory write committed (1 cycle) | Victim resolved; proceed with the pending fill | **DIR_MEM_WAIT** |
@@ -1034,7 +1060,7 @@ Each transient **state field** has exactly one exit event (§3.3); intermediate 
 
 **Notes.**
 
-1. **DIR_E / DIR_M record the last known state of a sole owner.** Because the L1 performs a silent E→M upgrade without notifying the directory, the owner's L1 state is authoritative for E-versus-M; an owner that receives a forward while holding the line in M writes back (DATAFWD carries the dirty data to the bank) before the directory replies DATA. A PUTM arriving while DIR_FWD_WAIT is therefore legal and is absorbed by the DTR's WRITE_BACK sub-progress.
+1. **DIR_E / DIR_M record the last known state of a sole owner.** The L1 may silently upgrade E→M without notifying the directory, so the owner's L1 state is authoritative for E-versus-M; an owner that receives a forward while holding the line in M writes back (DATAFWD carries the dirty data to the bank) before the directory replies DATA. Consequently the home bank/tap may be stale while DIR_E holds an owner that has silently upgraded to M; the owner is authoritative, and the bank is refreshed on a forward (DATAFWD) or on eviction (PUTM, see the `DIR_E | PUTM` row). A PUTM arriving while DIR_FWD_WAIT is therefore legal and is absorbed by the DTR's WRITE_BACK sub-progress.
 2. **The 3-bit state field has no spare code.** Any future directory state requires re-layout of the entry.
 3. **Eviction is never silent and INVACK counting is bit-clearing** (§3.3 rules 2 and 4). The idempotence of bit-clearing is what makes the late-PUTS/in-flight-INVACK race harmless.
 4. **The single-exit property is what makes the bounded-liveness claim of §5.3 meaningful**, and it is exactly what the predecessor's `PROXY_WAIT` dead state violated.
@@ -1089,7 +1115,7 @@ Each transient **state field** has exactly one exit event (§3.3); intermediate 
 
 **Safety (BMC-proved):** A1.1–A1.5 (5), A2.1–A2.7 (7), A3.1–A3.6 (6), A4.1–A4.8 (8), A6.1–A6.4 (4), A7.1–A7.4 (4), A8.1–A8.4 (4) = **38 bound safety assertions**, plus the four A5 bounded-liveness assertions = **42 bound SVA**. Separately, the seven **formal-only network invariants I1–I7** are proved in SymbiYosys and are not counted in the 42 (total property inventory: 49).
 
-**Bounded liveness (proved under Premise F, bound *T*):** every transient state field exits within *T* = 64 cycles (2×2 formal) / 150 cycles (4×4 simulation); every request receives a response within *T*; every VC with pending traffic is served within 8 arbitration rounds.
+**Bounded liveness (proved under Premise F, bound *T*):** every transient state field exits within *T* = 64 cycles (2×2 formal) / 150 cycles (4×4 simulation); every request receives a response within *T*; every VC with pending traffic is served within 13 arbitration rounds.
 
 **Structural lemma (documented, premises confirmed by k-induction at k = 16):** deadlock freedom per §4.6 — Layer 1 (XY + VC preservation), Layer 2 (ascends inter-class graph), Layer 3 (credits), Premises R and F.
 
@@ -1106,8 +1132,11 @@ Each transient **state field** has exactly one exit event (§3.3); intermediate 
 | 5 | Post-synthesis resource table (LUT/FF/BRAM at 2×2) | To be appended to §6.1; fit claim stays open until then | Week 14 |
 | 6 | IEEE conference venue | To be selected | Week 15 |
 | 7 | Transient timeout detection mechanism (how *T* is counted in RTL) | To be specified; bounded by *T* | Week 10 |
-| 8 | Age-counter threshold for the fairness escape (working value: 8 rounds) | Proposed; do not treat as confirmed — confirm against measured VC load; record the chosen value and the measurement in §3.5 | Week 10 |
+| 8 | Age-counter threshold for the fairness escape | **Confirmed: 5 rounds** (ruling B1) — the only value consistent with the WP's own corner-tile bound of 11 (5 + 3 + 3); retune against measured VC load at Week 10, and re-derive the bound if it changes | Week 10 (retune only) |
 | 9 | Bank arbiter service order among local fills, remote requests and tap traffic | Not fixed by this specification (R2); either specify or leave implementation-defined at RTL freeze | Week 4 |
+| 10 | DMA L1-lite FSM | The DMA tile's L1-lite state machine — its MESI states, its FWD/INV handling, and its one-outstanding-transaction-per-channel limit — is not specified in the WP; §3.11 states only its receive path | To be specified if the Week-8 gate passes | Week 10 |
+| 11 | DMA configuration — **4×4 only; withdrawn from the 2×2 build** (ruling B4) | The committed 2×2 mesh has exactly 4 tile positions and all 4 are CPU tiles (§6.1: "2×2, 4 CPU tiles"); §3.11's DMA tile is the 16th tile of a 4×4 mesh, so a DMA tile cannot join the 2×2 build without changing the committed topology and the BRAM/LUT budget. The DMA track is therefore **simulation-only on the 4×4 configuration**, evaluated against the Week-8 gate; if the gate passes, the work proceeds in the 4×4 track (home code, tile slot, sharer arithmetic); if it fails, §3.11's fallback applies (codes 1100–1101 revert to Reserved, DMA moves to §9, no RTL change). **No 2×2 DMA deliverable exists.** | 4×4 track, Week-8 gate exit |
+| 12 | **Lemma L1 versus a mid-miss tile** — may the directory send an INV or FWD to a tile that has an outstanding miss on that same line? | **Open — raised by ruling B5.** A BMC trace at depth 128 reached a state in which the directory was in DIR_S with a sharer bit set for a tile that was mid-miss (`L1_SM_D`) and therefore held no data. In that state A2.2a is vacuously true (no tile holds the line in S), so the sharer-accuracy property does not constrain it. If the directory can issue an INV or FWD to such a tile, Lemma L1 ("no L1 receives a message for a line on which it has an outstanding miss") is false as written and the deadlock-freedom proof of §4.6 loses a case | Decide from the K = 64 BMC run **with assertions live** and a directed test of the trace scenario; then either restate Lemma L1 as "no L1 *services* a message for a line on which it has an outstanding miss — it defers it until the miss completes" (§3.3 rule 6), or forbid the directory from issuing such a message | Week 10 |
 
 ---
 
@@ -1121,7 +1150,7 @@ All six draft white papers (Qwen, Mistral/GLM-5.3, MiniMax, Grok, Gemini, DeepSe
 | **B** | DIR_FWD_WAIT successor ambiguity (fatal F1) | 1-bit latch | split into _S/_M | DTR pending-op | latch or split | split (App. B) | pending_type register | **Single state + `pending_op` in the DTR; exit event is UNBLOCK, not DATAFWD (§3.7, App. B)** | Two rows for one (state,event) pair is a non-function and makes model equivalence unprovable; a controller register is the lightest fix that preserves the 3-bit field |
 | **C** | Eviction acknowledgement (fatal F2) | add PUT_ACK | needed | add PUTACK | add PUTACK | add PUTACK | add PUTACK | **PUTACK, code 1011, VC2, 1 flit; PUTS/PUTM directory rows added (App. B)** | Unanimous; without it EI_A/MI_A are orphan transients, violating the design's own invariant |
 | **D** | Reference model fidelity | transaction | transaction | transaction | — | transaction | transaction | **Transaction-level; timing checked by SVA/formal (§5.4)** | Unanimous once the predecessor's "cycle-accurate" wording is traced; a cycle model duplicates RTL |
-| **E** | Address-map layout and stored tags | [14:11] home, [10:8] L2 set | **[12:9] home, [8:6] L2 set** | [14:11], disjoint | retained | [14:11], disjoint | [14:11], disjoint | **Disjoint map: offset[5:0], L1 set[7:6], L2 set[10:8], home[14:11], tag[31:15] (4×4) / home[12:11] (2×2). Stored L2 tag = {addr[31:15], addr[7:6]} = 19 b — corrected against *all six drafts*** | Overlapping L2/L1 sets correlate the two indices (one L1 set backed by only 512 B). Separately, every draft's stored-L2-tag width is wrong: L1-set bits [7:6] lie below the L2 index and must still be compared (§3.6) |
+| **E** | Address-map layout and stored tags | [14:11] home, [10:8] L2 set | **[12:9] home, [8:6] L2 set** | [14:11], disjoint | retained | [14:11], disjoint | [14:11], disjoint | **Disjoint map: offset[5:0], L1 set[7:6], L2 set[10:8], home[14:11], tag[31:15] (4×4) / home[12:11] (2×2). Stored L2 tag = {addr[31:15], addr[7:6]} = 19 b — corrected against *all six drafts* (as ruled; superseded by N3a/N13 — the per-line word is 21 b = 19 b address tag + valid + dirty)*** | Overlapping L2/L1 sets correlate the two indices (one L1 set backed by only 512 B). Separately, every draft's stored-L2-tag width is wrong: L1-set bits [7:6] lie below the L2 index and must still be compared (§3.6) |
 | **F** | Packet framing (fatal F3) | 6-bit LEN | **4-bit LEN + 2 reserved** | 6-bit LEN | reserved[5:0] = LEN | 6-bit LEN | 6-bit LEN | **6-bit LEN at header [37:32] = total flits (1–63); body flits pure payload; tail bit only on single-flit packets** | 5-vs-1; a tail bit in body flits costs 1 payload bit and 11 % NoC occupancy; 4 bits caps at 16 and leaves spare bits |
 | **G** | DMA message vocabulary | drop DMA_READ | reserve 11–13 | keep all 3 | reserve 11–13 | keep 14 incl. DMA_READ | drop DMA_READ | **DMA_READ not defined (a DMA read *is* GETS from the L1-lite; the source tile ID distinguishes it); DMA_WRITE and DMA_ACK retained, codes 1100/1101, gated** | A message with no protocol delta is not a message; DMA_WRITE is genuinely distinct (write-with-inline-data, no fetch-before-write) |
 | **H** | VC arbitration policy | fixed priority | fixed priority | **pure round-robin** | fixed priority | fixed priority | fixed priority | **Fixed class priority RESP > INV > FWD > REQ *plus* an age-counter escape (≥ 8 rounds ⇒ grant next) and round-robin across input ports (§3.5)** | Resolves the 5-vs-1 split: the majority is right that protocol-critical traffic must not queue behind requests; MiniMax is right that pure fixed priority starves REQ, which is a liveness failure under Premise F. The escape counter supplies the bound the liveness proof needs |
@@ -1146,6 +1175,10 @@ All six draft white papers (Qwen, Mistral/GLM-5.3, MiniMax, Grok, Gemini, DeepSe
 | **AA** | Tile-ID field width | — | — | — | — | — | — | **TILE_ID_W logical (2 at 2×2, 4 at 4×4); 8 bits physical in the header with high bits reserved zero; LLD 2-bit ports are correct; WP §3.6 "(256 tiles)" claim withdrawn (§3.6, §3.8)** | Parameterisation principle (§1.3); approved LLD; directory binds at 16 so the 8-bit allocation is not a scalability claim |
 | **AB** | Age-escape threshold status | — | — | — | — | — | — | **Working value 8, status "proposed" — not confirmed. The LLD's "8 rounds" is the same working value, not an empirical confirmation. Liveness proof is parametric in the bound; only an artifact (Week-10 measurement) can promote it to confirmed (§3.5, §12 #8)** | The WP's own §12 open-item machinery is the authority; §8 forbids an unevidenced confirmed claim; the proof does not depend on the number |
 | **AC** | Credit counter width | — | — | — | — | — | — | **4 bits (`credit_in/out[3:0]`); WP §3.5 corrected from 3 bits (§3.5)** | Approved LLD interface is normative; 3 bits is minimal but 4 bits avoids re-review of approved RTL and testbench ports |
+| **AD** | DMA scope (ruling) | 4×4 | 2×2 | 2×2 | 2×2 | 2×2 | 2×2 | **4×4 only; withdrawn from the 2×2 build** | Ruling B4 (WP §3.11): the committed 2×2 mesh has exactly 4 CPU-tile positions and all 4 are CPU tiles (§6.1); the DMA tile is the 16th tile of a 4×4 mesh, so no 2×2 DMA deliverable exists; the DMA track is 4×4-only and simulation-only, evaluated against the Week-8 gate (§3.11, §12 #11) |
+| **AE** | Fairness bound composition (ruling B1) | — | — | — | — | — | — | **Age-escape threshold 5 rounds, confirmed (§12 #8); bound derived as 5 + 3 + 5 = 13 switch-arbitration rounds at an interior tile and 5 + 3 + 3 = 11 at a corner; one round is one router clock cycle; the output switch arbiter is port-granular with an oldest-counter-first tie-break (§3.5, §5.3)** | Supersedes the 8-round working value recorded in §13 H and §13 AB: the WP's own corner-tile bound of 11 is derivable only with a 5-round threshold (5 + 3 + 3), so 5 is the value that reconciles the document's own figures; the bound is now derived from the structure instead of asserted, which is what Premise F's k-induction needs; retuning at Week 10 re-derives the bound and does not touch the deadlock proof (§12 #8) |
+| **AF** | Dirty eviction concurrent with an outstanding miss (ruling B2) | — | — | — | — | — | — | **Rule 10 split: proactive evictions are deferred until the miss completes, the conflict eviction intrinsic to the miss is not deferred — the PLRU victim is released before the miss request (dirty → PUTM on VC0, clean → PUTS on VC0), as a sub-step of the miss transient with the L1 remaining in IS_D/IM_D (§3.3 rule 10, App. A)** | Deferring every eviction deadlocks a set-full conflict miss (the miss needs a way, the way needs PUTACK, the PUTACK needs the home bank that is busy with the miss); evict-then-fetch removes the cycle without a second transient or MSHRs, and because the release and the miss request both ride VC0 the per-VC FIFO order of I4 preserves their order at the source (§3.3 rule 10) |
+| **AG** | Sharer accuracy under a concurrent owner eviction (ruling B5) | — | — | — | — | — | — | **A2.2 restated as two clauses under one assertion ID: A2.2a “no missing bits” (strict — every tile holding the line in S has its bit set) and A2.2b “bounded extra bits” (a stale bit is permitted only while that tile's release notification is in flight, and must clear within *T* = 64 cycles). The committed sharer set on the DIR_FWD_WAIT exit excludes a tile that has already released the line. The directory's sharer vector is a conservative superset of the actual holders, never a subset. **No RTL change is required for the Case-C bookkeeping lag**; the K = 64 BMC run with assertions live, and a directed test of the depth-128 trace scenario, must confirm that before B5 is closed (§12 item 12)** | Ruling B5: the verification team reproduced — by directed test and by a BMC counterexample — the case where the owner evicts while a forward is outstanding. The owner's PUTS travels on VC0 and the requester's UNBLOCK on VC2, and no FIFO order relates them, so the directory may exit DIR_FWD_WAIT while a sharer bit still names a tile that has already released. That transient is inherent to an asynchronous release notification, not an RTL defect: the directory absorbs the PUTS, clears the bit and self-corrects, and data integrity is unaffected. The previous wording (“sharers equal the S-mask exactly, no stale bits”) assumed instantaneous message delivery and is therefore unachievable per cycle. The correct restatement is one-sided: the missing-bit direction, which is what prevents two writers on one line, stays strict, and the extra-bit direction is bounded by the release flight time. Rejected: routing PUTS on VC1 (breaks invariant I2, VC = class) and adding PUTACK to S-state evictions (extra round trip, deadlock risk). |
 
 **Rejected with proof (recorded so they are not silently reintroduced):**
 
