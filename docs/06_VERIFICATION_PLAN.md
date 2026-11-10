@@ -22,7 +22,7 @@ Three-layer verification methodology guaranteeing cache coherence, protocol safe
 ## 3. Exit Criteria (Per Module)
 
 A module is green only when **all four** hold:
-1. RTL lint clean — `python3 tb_rtl_evidence/lint/check_rules.py --verilator` passes CR1/CR2 against `tb_rtl_evidence/lint/coding_rules.json` (zero `%Error`; only the recorded style warning classes `UNUSEDSIGNAL`/`UNUSEDPARAM` fire); unit testbench pass.
+1. RTL lint clean — `python3 lint/check_rules.py --verilator` passes the **canonical 25-rule set** in `lint/coding_rules.json` (CR01: zero `%Error`; CR02: only the recorded style warning classes `UNUSEDSIGNAL`/`UNUSEDPARAM` fire; CR03–CR25: the source-level synthesis/style rules); unit testbench pass.
 2. 42 bound SVA assertions pass BMC K=64 in SymbiYosys — **anti-vacuity**: the run must report its live assertion count in the elaborated design (post-B6 slice: 36 `$check` cells = 32 asserts + 4 assumes) and the depth reached; a green log without both numbers is not a pass.
 3. TLM reference model shadow comparison: zero mismatches across directed tests.
 4. `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **134/134, exit 0**.
@@ -53,7 +53,7 @@ Smoke test: 4-bit ALU (add/sub/pass), single cocotb test asserting (2+3)==5 → 
 | Scaffold | Tests | Status |
 |---|---|---|
 | tb/smoke | ALU + DFF (async reset) | PASS (positive + 2 negative controls) |
-| tb/l1_dir | F1 (forward release) | Scaffold only — positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL. Discrimination proven by mutation test (originally 3 stub mutations A/B/C, 9/9; current matrix: 4 variants × 4 tests incl. the B8.1 head-insertion control MUT-D, **16/16 derived from the matrix**) |
+| tb/l1_dir | F1 (forward release) | Scaffold only — positive FAILS against stub; baseline vs zero-stub: neg1 PASS, neg2 FAIL. Discrimination proven by mutation test (originally 3 stub mutations A/B/C, 9/9; current matrix: 4 variants × 5 tests incl. the B8.1 head-insertion control MUT-D, **20/20 derived from the matrix**) |
 
 ## 6. Ruling B5 — A2.2 Split & Sharer-Accuracy Verification
 
@@ -92,4 +92,21 @@ Smoke test: 4-bit ALU (add/sub/pass), single cocotb test asserting (2+3)==5 → 
 **Golden result (v5 Task 3.6):** **B6.1 ✓** t=8 (INV to the mid-miss tile), **B6.2 ✓** (`abort_o` t=10, `INVACK` t=11), **B6.3 ✓** — both stores complete within the 600-cycle window (tile1 t=28, tile0 t=61), **B6.4 ✓** exactly one `M` (`l1_0=M l1_1=I`, `final_dir=M sharers=1`); all four VC queues empty at the end. Negative control unchanged: the defer-INV mutant fails **B6.2 `DEFER-INV FAULT PRESENT`** (fault present, `mutant_run.log`).
 
 **Ruling B7.2 (completion/decline):** no further RTL change — the tile accepts the stale grant: the parked access is re-driven by the DATA-install path, so the directory's transient always exits and the directory never records a tile that declined (it records the owner only from the accepted grant's UNBLOCK path). §12 item 13 (bounded progress under repeated aborts) was recorded **open** by B7 — ruling **B8** (§4.6 Lemma L2: a re-issued access is a new request, enqueued at the back of the line's queue, so the oldest pending request always completes) **closes** it.
+
+## 9. Ruling B8 — Re-Issue Ordering (B8.1) and its RTL coverage status
+
+**B8.1 (re-issue ordering) — RTL status: NOT RTL-VERIFIED.** The current RTL implements the accept path only (B7.2 permits accept or decline), so the B6 abort does not re-transmit and no RTL behaviour depends on the re-issue ordering rule. The rule is verified in the transaction-level reference model (Mut-08, killed) and, after R3, by the three-tile directed case. Implement the decline path to close this at RTL level; tracked as an open item.
+
+**What the three-tile directed case does and does not prove (v7 Task R3, `tb_rtl_evidence/directed_vc0_fifo/`).** The case uses **three tiles**, the minimum that puts two pending REQs for the *same* line on VC0 at once: tile0 GETs the line, the directory is busy in `DIR_MEM_WAIT` for the DATA/UNBLOCK round trip, and tiles 1 and 2 each GET the same line while it is busy.
+
+| Check | Result |
+|---|---|
+| B8.1.1 (anti-vacuity) | ✓ t=5 — VC0 holds **2 pending REQs for the same line** (`cnt=2 rd=1 wr=3`), read from the directory's own queue pointers and entries, not inferred |
+| B8.1.2 (FIFO order, I4) | ✓ baseline: arrival `[1,2]` = served `[1,2]` — the oldest pending request is served first |
+| B8.1.3 (completion, Lemma L2) | ✓ the line completes: `DIR_S`, `sharers=0b111`, all three L1s in `L1_S`, every requester completes |
+| B8.1.2 negative control (MUT-D, head insertion) | ✗ **FIFO-ORDER VIOLATION** — arrival `[1,2]` but served `[2,1]`. The mutant still completes the line (`sharers=0b111`, all three L1s in `L1_S`), so it is killed **by the ordering property itself**, not by a stall or a same-cycle-pop side effect |
+
+The mutation matrix grows to **5 columns (20/20 derived from the matrix)**: the old two-tile `race` case is kept as a regression, and the new `vc0_fifo` column is the one that kills MUT-D with the ordering detector.
+
+**Scope limit.** The case exercises the *mechanism* the B8.1 rule depends on — the per-VC FIFO ordering (I4) of the directory's request queue — and shows that a head insertion is observable and detected. It does **not** make B8.1 an RTL-verified property: the re-issue that B8.1 constrains never occurs in the RTL, because the decline path does not exist. The two-tile upgrade-race case could not show this either (with one outstanding request per tile, VC0 never holds two same-line REQs at once). Closing B8.1 at RTL level requires the decline path; tracked as an open item.
 

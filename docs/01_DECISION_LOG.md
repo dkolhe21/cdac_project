@@ -51,6 +51,14 @@
 > |---|---|---|---|---|---|---|---|---|---|
 > | **AJ** | Bounded progress under repeated upgrade-race aborts (ruling B8) | — | — | — | — | — | — | **An aborted access re-issues as a new request and is enqueued at the BACK of the directory's request queue for that line (FIFO within VC0, invariant I4). The oldest pending request for a line is never invalidated by a concurrent upgrade, so it completes; each round retires at least one pending request. Lemma L2 states the bound. No backoff, ticket or ageing mechanism is required** | Ruling B8: the verification team re-raised the livelock challenge (two tiles aborting each other's upgrade in turn, unboundedly). The specification already implied the answer but never stated it — a re-issued access is a new request, so it enters the queue at the back rather than the head. Stating that makes the oldest pending request immune to concurrent invalidation, which bounds progress directly. The challenge is therefore **closed as a spec clarification**, not as a new protocol mechanism. |
 
+### B8.1 (re-issue ordering) — RTL status: NOT RTL-VERIFIED
+
+The current RTL implements the accept path only (B7.2 permits accept or decline), so the B6 abort does not re-transmit and no RTL behaviour depends on the re-issue ordering rule. The rule is verified in the transaction-level reference model (Mut-08, killed) and, after R3, by the three-tile directed case. Implement the decline path to close this at RTL level; tracked as an open item.
+
+**Coverage note (v7 Task R3).** The three-tile directed case (`tb_rtl_evidence/directed_vc0_fifo/`) exercises the mechanism B8.1 depends on — the per-VC FIFO ordering (I4) of the directory's request queue — with the minimum setup that makes it observable: tile0 GETs the line, the directory is busy in `DIR_MEM_WAIT`, and tiles 1 and 2 GET the same line while it is busy, so **two pending REQs for the same line sit on VC0 at once** (proved from the queue pointers: `cnt=2 rd=1 wr=3`). The head-insertion mutant (MUT-D) is then killed by the **ordering detector** — arrival `[1,2]` but served `[2,1]` — while the line still completes (`sharers=0b111`, all three L1s in `L1_S`), so the kill is the ordering property itself and not a stall. The two-tile upgrade-race case could not show this: with one outstanding request per tile, VC0 never holds two same-line REQs at once. The mutation matrix is now 5 columns, **20/20 derived from the matrix**; the old two-tile case is kept as a regression.
+
+This does **not** change B8's status as a *specification* ruling (it closes §12 item 13 on paper). It records that the property is **not yet verified at RTL level**, because the re-issue it constrains does not exist in the RTL. The decline path is the missing piece; tracked as an open item.
+
 ## Contested Decisions
 
 *(None currently contested. Contested decisions are recorded here with open questions and resolution path.)*
