@@ -150,7 +150,7 @@ status: dtr_busy    (one transaction per bank, N4/N5)
 
 A module is green only when **all four** hold:
 
-1. **RTL lint clean** — `python3 tb_rtl_evidence/lint/check_rules.py --verilator` (CR1/CR2 against `tb_rtl_evidence/lint/coding_rules.json`); unit testbench pass
+1. **RTL lint clean** — `python3 lint/check_rules.py --verilator` (canonical 25-rule set in `lint/coding_rules.json`); unit testbench pass
 2. **42 bound SVA assertions** pass BMC K=64 in SymbiYosys
 3. **TLM reference model shadow** comparison: zero mismatches across directed tests
 4. **Spec gate**: `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **134/134, exit 0**

@@ -1,5 +1,7 @@
 # Simulation build artifacts
 sim_build/
+sim_build_mut/
+sim_build*/
 *.vvp
 results.xml
 *.vcd
