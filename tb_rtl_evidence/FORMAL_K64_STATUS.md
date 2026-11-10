@@ -54,21 +54,29 @@ below is what the log actually says at the time of writing — not a target.
 | Quantity | Observed |
 |---|---|
 | Depth target | 64 (from `l1_dir.sby`) |
-| Depth reached | **29** (`Checking assertions in step 29`, the last step entered) |
-| Live assert cells | 32 |
-| Live assume cells | 4 |
-| Violations so far | 0 (no `Assert failed` line in the log) |
+| Depth reached | **30** (`Checking assertions in step 30`, the last step entered) |
+| Live assert cells | **32** (counted from `model/design.il`) |
+| Live assume cells | **4** (counted from `model/design.il`) |
+| Total live `$check` cells | **36** |
+| Violations so far | **0** (no `Assert failed` line in the log; `grep -c "Assert failed\|BMC failed"` = 0) |
 | Failing step | none so far — no assertion has failed |
 | Failing signals | n/a — no counterexample exists yet |
-| Wall clock | 0:21:02 at the last logged step |
+| Wall clock | **0:28:46** at the last logged step (run started 16:04:28) |
+| Status file | not yet written (`l1_dir/status` absent) — the run has not concluded |
 
-Raw tail of the live run:
+Raw tail of the live run (`tb_rtl_evidence/sby_k64/l1_dir/logfile.txt`):
 
 ```
-SBY 16:21:03 [l1_dir] engine_0: ##   0:16:02  Checking assertions in step 29..
-SBY 16:22:03 [l1_dir] engine_0: ##   0:17:02  waiting for solver (1 minute)
-SBY 16:26:03 [l1_dir] engine_0: ##   0:21:02  waiting for solver (5 minutes)
+SBY 16:31:03 [l1_dir] engine_0: ##   0:26:02  waiting for solver (10 minutes)
+SBY 16:32:43 [l1_dir] engine_0: ##   0:27:42  Checking assumptions in step 30..
+SBY 16:32:47 [l1_dir] engine_0: ##   0:27:46  Checking assertions in step 30..
+SBY 16:33:47 [l1_dir] engine_0: ##   0:28:46  waiting for solver (1 minute)
 ```
+
+The run is supervised by a **systemd user unit** (`systemctl --user status
+bmc_k64`), so a machine restart cannot kill it — the v6 run was lost twice to
+server restarts, and an earlier attempt of this one was killed the same way
+before it was moved under systemd.
 
 ## Status of the formal item
 
