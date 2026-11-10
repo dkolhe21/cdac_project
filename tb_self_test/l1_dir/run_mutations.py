@@ -10,16 +10,22 @@ Variants
 
 Matrix (each cell is the expected result for that variant x test; the count
 is derived from len(VARIANTS) x len(TESTS), never hard-coded):
-             positive   neg_skip_fwd   neg_dirty_bit   race
-  baseline     PASS        FAIL            FAIL         PASS
-  MUT-B        FAIL        FAIL            PASS         PASS
-  MUT-C        FAIL        PASS            FAIL         FAIL
-  MUT-D        PASS        FAIL            FAIL         FAIL
+             positive   neg_skip_fwd   neg_dirty_bit   race   vc0_fifo
+  baseline     PASS        FAIL            FAIL         PASS      PASS
+  MUT-B        FAIL        FAIL            PASS         PASS      PASS
+  MUT-C        FAIL        PASS            FAIL         FAIL      FAIL
+  MUT-D        PASS        FAIL            FAIL         FAIL      FAIL
 
 The `race` column is the directed concurrent-upgrade test: its two GETMs
 reach the directory on consecutive cycles (tb merge-FIFO), so a head-insert
 either steals the queue position of the older request (wrong INV target)
-or is orphaned by the same-cycle pop (stall/timeout) — both are catches.
+or is orphaned by the same-cycle pop (stall/timeout) - both are catches.
+
+The `vc0_fifo` column is the three-tile VC0 FIFO-ordering test (ruling
+B8.1 / invariant I4). Three tiles put two pending REQs for the SAME line
+on VC0 at once, so a head insertion is observable as an ORDER swap: the
+newest request is served before the oldest. The mutant is killed by the
+FIFO-order detector itself (the line still completes), not by a stall.
 
 Each run is a fresh compile (make clean) and a single cocotb TESTCASE.
 The source file is restored from a byte copy and md5-verified after every
@@ -35,6 +41,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 L1 = HERE / "../../rtl/l1/l1_mesi_ctrl.sv"
 DIR = HERE / "../../rtl/directory/dir_ctrl.sv"
 RACE = HERE / "../../tb_rtl_evidence/directed_upgrade_race"
+VC0FIFO = HERE / "../../tb_rtl_evidence/directed_vc0_fifo"
 
 L1_ANCHOR = """          if (state == L1_E && rx_addr == addr_q)
             send(MSG_DATAFWD, addr_q, data_q, 1'b0, 1'b0);  // clean
@@ -77,18 +84,20 @@ VARIANTS = {
     "MUT-D": (DIR, HEAD_ANCHOR, HEAD_MUT),
 }
 
-TESTS = ["positive", "neg_skip_fwd", "neg_dirty_bit", "race"]
+TESTS = ["positive", "neg_skip_fwd", "neg_dirty_bit", "race", "vc0_fifo"]
 TESTCASE = {
     "positive": "test_f1_forward_positive",
     "neg_skip_fwd": "test_f1_forward_negative_skip_fwd",
     "neg_dirty_bit": "test_f1_forward_negative_dirty_bit",
     # "race" runs the directed upgrade-race test in its own directory.
+    # "vc0_fifo" runs the three-tile VC0 FIFO-ordering test in its own
+    # directory.
 }
 EXPECTED = {
-    "baseline": {"positive": True, "neg_skip_fwd": False, "neg_dirty_bit": False, "race": True},
-    "MUT-B": {"positive": False, "neg_skip_fwd": False, "neg_dirty_bit": True, "race": True},
-    "MUT-C": {"positive": False, "neg_skip_fwd": True, "neg_dirty_bit": False, "race": False},
-    "MUT-D": {"positive": True, "neg_skip_fwd": False, "neg_dirty_bit": False, "race": False},
+    "baseline": {"positive": True, "neg_skip_fwd": False, "neg_dirty_bit": False, "race": True, "vc0_fifo": True},
+    "MUT-B": {"positive": False, "neg_skip_fwd": False, "neg_dirty_bit": True, "race": True, "vc0_fifo": True},
+    "MUT-C": {"positive": False, "neg_skip_fwd": True, "neg_dirty_bit": False, "race": False, "vc0_fifo": False},
+    "MUT-D": {"positive": True, "neg_skip_fwd": False, "neg_dirty_bit": False, "race": False, "vc0_fifo": False},
 }
 
 
@@ -107,6 +116,8 @@ def apply_mutation(path, anchor, replacement):
 def run_test(case):
     if case == "race":
         cwd, args = RACE, ["MODULE=directed_upgrade_race"]
+    elif case == "vc0_fifo":
+        cwd, args = VC0FIFO, ["MODULE=directed_vc0_fifo"]
     else:
         cwd = HERE
         args = [f"MODULE=test_f1_forward", f"TESTCASE={TESTCASE[case]}"]
