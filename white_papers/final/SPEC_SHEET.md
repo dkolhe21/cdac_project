@@ -45,7 +45,7 @@ One tile module shown (Tile 0 port usage); all tiles instantiate the identical m
 - **Datapath:** CORE → L1 → INTRA-TILE MUX → (ADDRESS DECODER: `home = addr[12:11]`, `home == TILE_ID?`) → local: DIRECTORY CONTROLLER + DTR / remote: NIC → 5-PORT XY ROUTER → mesh.
 - **Directory path:** CONTROLLER + DTR (8-state FSM over the 8 state codes of §3.3; DTR sub-state held separately, §4) → BANK ARBITER (queues: local req, remote req, mem fill/WB → one serialized L2 port) → DIRECTORY ARRAY + L2 BANK → MEMORY PORT (off the NoC path).
 **Directory receive path (ruling B7):** the home tile's receive path is **per-VC** — one queue per VC, popped by the class priority **RESP > INV > FWD > REQ** (WP §3.5), so a response is never head-of-line blocked behind a request. The four VCs are VC0 REQ, VC1 FWD, VC2 RESP, VC3 INV — FWD and INV are distinct classes, with INV ranking above FWD. **Re-issue ordering (ruling B8):** an aborted access re-issues as a **new** request and is enqueued at the **back** of the queue for that line (FIFO within VC0), so it can never overtake an older pending request; the oldest pending request for a line therefore always completes (Lemma L2, WP §4.6).
-- **Router:** RC → VA → SA → ST; 4 VCs × 4 flits/port; **credit 4 b**, wormhole; arbitration RESP > INV > FWD > REQ, age escape at 8 rounds (status: *proposed*, §9.3), round-robin per output; Local port = NIC.
+- **Router:** RC → VA → SA → ST; 4 VCs × 4 flits/port; **credit 4 b**, wormhole; arbitration RESP > INV > FWD > REQ, age escape at 5 rounds (confirmed, ruling B1), round-robin per output; Local port = NIC.
 - **Per-port interface (widths and fields normative; signal names illustrative):** `flit_out/in[63:0]`, `flit_out/in_vc[1:0]`, `flit_out/in_valid`, **`credit_in/out[3:0]`**.
 - **Directory array block:** 32 entries × 32 b (10 b used, 22 b pad at 2×2): `V | sharers[4] | owner[2] | state[3]`.
 - **L2 bank block:** TAG 32 × 23 b = `{valid, addr[31:13], addr[7:6], dirty}`; DATA 2 KB = 32 × 64 B; tree-PLRU 3 b/set. (dirty = bank copy newer than the tap, N3a; valid distinguishes an empty way from a resident line, N13 — neither participates in the tag comparison)
@@ -148,7 +148,7 @@ Credit-based per VC: **4-bit credit counter** initialised to the downstream FIFO
 | VC2 | RESP | DATA, DATAFWD, INVACK, UNBLOCK, PUTACK, *DMA_ACK (gated)* | 4 flits |
 | VC3 | INV | INV | 4 flits |
 
-Arbitration (WP §3.5, two layers): **per input port** — fixed class priority **RESP > INV > FWD > REQ** plus an **age-counter escape**; **per output port** — round-robin across input ports. Age threshold: value **8 rounds is a working value, status "proposed" — not confirmed** (decision AB); to be confirmed against measured VC load at Week 10 (§12 item 8), with the chosen value and measurement recorded in §3.5. The liveness proof is parametric in the bound — a retuned value does not affect the deadlock proof. The LLD's "age escape at 8 rounds" is this same working value, not an empirical confirmation.
+Arbitration (WP §3.5, two layers): **per input port** — fixed class priority **RESP > INV > FWD > REQ** plus an **age-counter escape**; **per output port** — round-robin across input ports. Age threshold: value **5 rounds is confirmed (ruling B1)**; retune against measured VC load at Week 10 (§12 item 8), with the chosen value and measurement recorded in §3.5. The liveness proof is parametric in the bound — a retuned value does not affect the deadlock proof. The LLD's "age escape at 5 rounds" is confirmed by ruling B1.
 
 ## 10. Packet and flit format (WP §3.8 / Appendix C)
 
@@ -196,7 +196,7 @@ Both figures are stated because the spec carries the full code space while the b
 | (b) Tile-ID bit order / numbering | TILE_ID[1]=X, TILE_ID[0]=Y; T0=(0,0) T1=(0,1) T2=(1,0) T3=(1,1); corner ports T0:N,E / T1:S,E / T2:N,W / T3:S,W | **Y** | Normative — supersedes LLD's "proposed" hedge |
 | (c) Directory entry physical layout | V \| Sharers \| Owner \| State packed into low-order used bits (§4) | **Z** | Normative — in WP §3.2, matches LLD |
 | (d) Tile-ID field width | TILE_ID_W logical (2/4); 8 bits physical in header, high bits reserved; "(256 tiles)" withdrawn | **AA** | Normative — in WP §3.6/§3.8 |
-| (e) Age-escape threshold | 8 rounds = **working value, proposed**, not confirmed (Week 10 vs measured VC load) | **AB** | Open item WP §12 #8 |
+| (e) Age-escape threshold | 5 rounds = **confirmed (ruling B1)** (Week 10 vs measured VC load) | **AB** | Open item WP §12 #8 |
 | (f) DMA messages | DMA_WRITE/DMA_ACK present but **gated**; baseline = 12; missed gate ⇒ Reserved, never reassigned | **G** | Gated (§3.11) |
 
 ## 15. ⚠ Not specified in WP (do not invent)
@@ -228,7 +228,7 @@ Specified in the white paper; not yet implemented in the RTL, the reference mode
 - **Evict-during-forward** (N5, N12) — the L1 answers a FWD arriving in I, EI_A or MI_A with the defensive INVACK; the directory absorbs a PUTM in DIR_FWD_WAIT (satisfying the forward, sending PUTACK) and a PUTS in DIR_FWD_WAIT (cancelling the forward and serving the requester from the bank).
 - **FPGA stimulus source** — the on-board JTAG bridge (WP §6.1); ILA/VIO debug is future scope (§9).
 - **Rule 10 (deferred eviction)** — an L1 with an outstanding miss does not begin a replacement eviction; a needed eviction is deferred until the miss completes.
-- **Fairness bound** — a VC is served within 13 arbitration rounds (8-round age escape + ≤5 rounds of output-port round-robin).
+- **Fairness bound** — a VC is served within 13 arbitration rounds (5-round age escape + ≤5 rounds of output-port round-robin).
 - **Tree-PLRU update rule** — on a hit in way w, the 3-bit tree is updated so w's subtree becomes MRU; the victim is the way in the LRU subtree, lower-numbered way on a tie.
 - **NIC FIFO depth** — TX and RX FIFOs are 4 flits per VC.
 - **Intra-tile datapath width** — a whole cache line moves in one 512-bit transfer; the NoC moves the same line as 9 flits.

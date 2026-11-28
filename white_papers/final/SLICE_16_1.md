@@ -101,7 +101,7 @@ The 42 bound SVA are grouped into eight categories A1–A8. The categories that 
 | Category | Count | What it checks (relevant to §16.1) |
 |---|---|---|
 | **A1.x** | 5 | MESI invariants, scoped to the L1 arrays: at most one L1 in M (A1.1) and at most one in E (A1.2); S excludes any E/M copy (A1.3); shared data equality (A1.5) |
-| **A2.x** | 7 | Sharer-vector consistency: sharers = S-mask (A2.2); exactly one holder, equal to Owner (A2.3); owner ∈ sharers, sharers = {Owner} (A2.6); DIR_I ⟹ sharers = 0 and valid = 0 (A2.4) |
+| **A2.x** | 7 | Sharer-vector consistency: sharers = S-mask (A2.2); exactly one holder, equal to Owner (A2.3); owner ∈ sharers, sharers = {Owner} (A2.6); DIR_I ⟹ sharers = 0; valid = 1 after owner PUTM in DIR_E/M (B10), cleared only on DIR_EVICT (A2.4) |
 | **A3.x** | 6 | Message protocol: every request answered, no response without a request, correct destination. The defensive `INVACK` is still a response to a received `FWD`, so it must satisfy A3.1 |
 | **A5.x** | 4 | No orphan transient (bounded liveness): every transient exits within T |
 | **A7.x** | 4 | State-machine legality: every (state, event) pair maps to a defined next state; no undefined transitions; `DIR_FWD_WAIT` has exactly one exit (`UNBLOCK`) and `pending_op` selects the successor |
@@ -176,6 +176,6 @@ The slice is green when:
 1. **RTL** — `l1_mesi_ctrl` and `dir_ctrl` implement every row in §2.1 and §1.1; the L1 exposes its MESI state to the NIC for header bit [39].
 2. **SVA** — A1.1, A1.3, A2.2, A2.6, A3.x, A5.x, A7.x all pass in simulation (BMC K = 64 for safety).
 3. **Reference model** — the scoreboard shows zero mismatches on F1–F8 and on the formal run (F9).
-4. **Verifier** — `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` still reports 134/134 (no spec regression).
+4. **Verifier** — `python3 verify_patch_set.py --dir . --build-script build_diagrams_html.py` still reports 135/135 (no spec regression).
 
 Until all four are green, §8's "Forward release implemented" claim stays "Planned — milestone N".

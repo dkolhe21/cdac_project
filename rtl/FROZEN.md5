@@ -1,3 +1,5 @@
 b6ece1864f1ce6ddf5b6976775d34485  rtl/pkg/tile_pkg.sv
 0bc0d48f4c830ca1a1b6c45a29077c4c  rtl/l1/l1_mesi_ctrl.sv
-8e44ed1da9543a62e52bc448f7d899fe  rtl/directory/dir_ctrl.sv
+99e687bfbdc963c52fe36f14866f7409  rtl/directory/dir_ctrl.sv
+faf0a05038efa5b7189b983ccaff53fa  rtl/l2/l2_bank.sv
+d1cb2fb62197b5a3e37d084ffd96a4bd  rtl/l2/l2_ctrl.sv
