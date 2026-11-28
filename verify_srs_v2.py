@@ -1,1 +1,0 @@
-scripts/verify_srs_v2.py
