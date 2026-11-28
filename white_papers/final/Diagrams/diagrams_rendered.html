@@ -26,7 +26,7 @@
 </header>
 <main>
   <div class="card">
-    <div class="cardhead"><span class="num">1</span><h3>HLD-1: 4&#215;4 Mesh System</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">1</span><h3>HLD-1: 4&#215;4 Mesh System</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph MESH[&quot;4x4 2D mesh - 16 identical CPU tiles (WP 3.1, 3.5)&quot;]
         direction TB
@@ -81,7 +81,7 @@
     MESH --- NOTE4</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">2</span><h3>HLD-2: CPU Tile Internal Blocks and Datapaths</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">2</span><h3>HLD-2: CPU Tile Internal Blocks and Datapaths</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     CORE[&quot;1 Core / stimulus interface&lt;br/&gt;master port: load / store / flush&lt;br/&gt;no fence or atomic opcode&quot;]
     L1[&quot;2 L1 cache - private&lt;br/&gt;4 sets x 4 ways x 64 B = 1 KB&lt;br/&gt;write-back write-allocate, tree-PLRU 3 b/set, MESI per line&quot;]
@@ -111,7 +111,7 @@
     BANK -.-&gt;|&quot;cold miss: bank tag miss during DIR_MEM_WAIT&lt;br/&gt;then the tap supplies the line - ruling R3&quot;| TAP</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">3</span><h3>HLD-3: DMA Device Tile Variant [gated] (&#167;3.11, &#167;3.1)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">3</span><h3>HLD-3: DMA Device Tile Variant [gated] (&#167;3.11, &#167;3.1)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart LR
     subgraph DMA_TILE[&quot;DMA device tile - gated at Week 8 (WP 3.11)&quot;]
         ENGINE[&quot;DMA engine - two channels&quot;]
@@ -131,7 +131,7 @@
     ABSENT -.-&gt; DMA_TILE</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">4</span><h3>HLD-4: Message / Class / VC Plane (&#167;3.3, &#167;3.5, &#167;4.5, &#167;4.6)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">4</span><h3>HLD-4: Message / Class / VC Plane (&#167;3.3, &#167;3.5, &#167;4.5, &#167;4.6)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart LR
     subgraph CLS[&quot;Four message classes to four virtual channels - VC count frozen at 4&quot;]
         direction TB
@@ -150,7 +150,7 @@
     CLS --- RESV</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">5</span><h3>HLD-5: Verification Environment (&#167;5)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">5</span><h3>HLD-5: Verification Environment (&#167;5)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     DUT[&quot;DUT: 4x4 mesh RTL (simulation)&lt;br/&gt;2x2 mesh RTL (formal and FPGA)&quot;]
     subgraph SIM[&quot;Simulation - Verilator + pyuvm / cocotb&quot;]
@@ -189,7 +189,7 @@
     FORMAL --- CI</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">6</span><h3>LLD-1: Router Microarchitecture (&#167;3.5, &#167;4.6)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">6</span><h3>LLD-1: Router Microarchitecture (&#167;3.5, &#167;4.6)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart LR
     subgraph IN[&quot;Input side - 5 ports: LOCAL, N, S, E, W&quot;]
         direction TB
@@ -214,7 +214,7 @@
     SA --- DEADLOCK</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">7</span><h3>LLD-2: L1 MESI Controller FSM (Appendix A)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">7</span><h3>LLD-2: L1 MESI Controller FSM (Appendix A)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">stateDiagram-v2
     direction TB
     [*] --&gt; I
@@ -263,7 +263,7 @@
     end note</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">8</span><h3>LLD-3: Directory Controller FSM + DTR (Appendix B, &#167;3.3, &#167;3.7)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">8</span><h3>LLD-3: Directory Controller FSM + DTR (Appendix B, &#167;3.3, &#167;3.7)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">stateDiagram-v2
     direction TB
     [*] --&gt; DIR_I
@@ -324,7 +324,7 @@
     end note</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">9</span><h3>LLD-4: NIC Datapath (&#167;3.1, &#167;3.3, &#167;3.5, &#167;3.8)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">9</span><h3>LLD-4: NIC Datapath (&#167;3.1, &#167;3.3, &#167;3.5, &#167;3.8)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart LR
     subgraph TX[&quot;Transmit path&quot;]
         direction TB
@@ -356,7 +356,7 @@
     LOC --- LEN</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">10</span><h3>LLD-5: Intra-tile Request Path and L2 Bank Access (&#167;3.1, &#167;3.7, rulings R1–R3)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">10</span><h3>LLD-5: Intra-tile Request Path and L2 Bank Access (&#167;3.1, &#167;3.7, rulings R1–R3)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph SRC[&quot;Request sources - all queue, ruling R2&quot;]
         direction LR
@@ -390,7 +390,7 @@
     CTRL &lt;--&gt;|&quot;DIR-EVICT WRITE_BACK: read bank, write tap - ruling R3&quot;| TAP2</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">11</span><h3>LLD-6: Memory Tap (&#167;3.9, ruling R4)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">11</span><h3>LLD-6: Memory Tap (&#167;3.9, ruling R4)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph TAP[&quot;Memory tap - per CPU tile, not shared, simulation model&quot;]
         direction TB
@@ -413,7 +413,7 @@
     TAP --- NOTMODEL</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">12</span><h3>LLD-7: Address Decode and Stored-Tag Decomposition, 4&#215;4 (&#167;3.6)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">12</span><h3>LLD-7: Address Decode and Stored-Tag Decomposition, 4&#215;4 (&#167;3.6)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph ADDR[&quot;Physical address 31:0 - 4x4 configuration&quot;]
         direction LR
@@ -440,7 +440,7 @@
     STORED --- DMARES</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">13</span><h3>LLD-8: Header Flit Map and Packet Framing (&#167;3.8, Appendix C)</h3><span class="file">HLD_LLD_4x4_architecture.md</span></div>
+    <div class="cardhead"><span class="num">13</span><h3>LLD-8: Header Flit Map and Packet Framing (&#167;3.8, Appendix C)</h3><span class="file">4x4_full.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph HDR[&quot;Header flit, 64 bits&quot;]
         direction TB
@@ -460,7 +460,7 @@
     HDR --- SIZES</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">14</span><h3>HLD-F1: 2&#215;2 Mesh (FPGA emulation + formal configuration)</h3><span class="file">HLD_LLD_2x2_FPGA.md</span></div>
+    <div class="cardhead"><span class="num">14</span><h3>HLD-F1: 2&#215;2 Mesh (FPGA emulation + formal configuration)</h3><span class="file">2x2_lld.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph MESH22[&quot;2x2 mesh - 4 identical CPU tiles - committed FPGA target and formal configuration&quot;]
         direction TB
@@ -493,7 +493,7 @@
     MESH22 --- DMA22</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">15</span><h3>HLD-F2: FPGA Top Level, ZedBoard XC7Z020 (&#167;6.1, &#167;6.4, &#167;9)</h3><span class="file">HLD_LLD_2x2_FPGA.md</span></div>
+    <div class="cardhead"><span class="num">15</span><h3>HLD-F2: FPGA Top Level, ZedBoard XC7Z020 (&#167;6.1, &#167;6.4, &#167;9)</h3><span class="file">2x2_lld.md</span></div>
     <pre class="mermaid">flowchart TB
     CLK[&quot;Clock: 100 MHz, 10 ns period - WP 6.1 / 6.4&quot;]
     RST[&quot;Reset synchroniser&lt;br/&gt;false path declared in the XDC&quot;]
@@ -511,7 +511,7 @@
     TOP --- FALLBACK</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">16</span><h3>HLD-F3: Formal Verification Configuration, 2&#215;2 (&#167;5.3, Appendix E)</h3><span class="file">HLD_LLD_2x2_FPGA.md</span></div>
+    <div class="cardhead"><span class="num">16</span><h3>HLD-F3: Formal Verification Configuration, 2&#215;2 (&#167;5.3, Appendix E)</h3><span class="file">2x2_lld.md</span></div>
     <pre class="mermaid">flowchart TB
     MODEL[&quot;Formal model: the 2x2 mesh, 4 tiles&lt;br/&gt;minimum that exercises a multi-sharer fan-out of 2 sharers plus 1 requester&lt;br/&gt;and the 2-bit home decode - WP 5.3&quot;]
     subgraph PROPS[&quot;Property set&quot;]
@@ -531,7 +531,7 @@
     PROPS --- OPEN</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">17</span><h3>LLD-F1: 2&#215;2 Parameter Deltas vs 4&#215;4 (&#167;3.2, &#167;3.6, &#167;5.3, &#167;13)</h3><span class="file">HLD_LLD_2x2_FPGA.md</span></div>
+    <div class="cardhead"><span class="num">17</span><h3>LLD-F1: 2&#215;2 Parameter Deltas vs 4&#215;4 (&#167;3.2, &#167;3.6, &#167;5.3, &#167;13)</h3><span class="file">2x2_lld.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph W[&quot;Widths that CHANGE at 2x2&quot;]
         direction TB
@@ -558,7 +558,7 @@
     S --- LAT</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">18</span><h3>LLD-F2: Resource Budget, 2&#215;2 (&#167;6.1)</h3><span class="file">HLD_LLD_2x2_FPGA.md</span></div>
+    <div class="cardhead"><span class="num">18</span><h3>LLD-F2: Resource Budget, 2&#215;2 (&#167;6.1)</h3><span class="file">2x2_lld.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph TILE[&quot;Per CPU tile - BRAM36&quot;]
         direction TB
@@ -596,7 +596,7 @@
     CFG --- BRAMRULE</pre>
   </div>
   <div class="card">
-    <div class="cardhead"><span class="num">19</span><h3>LLD-F3: Timing Constraint Set and Critical Paths, XDC Content (&#167;6.4)</h3><span class="file">HLD_LLD_2x2_FPGA.md</span></div>
+    <div class="cardhead"><span class="num">19</span><h3>LLD-F3: Timing Constraint Set and Critical Paths, XDC Content (&#167;6.4)</h3><span class="file">2x2_lld.md</span></div>
     <pre class="mermaid">flowchart TB
     subgraph CON[&quot;Constraints - XDC is a named deliverable, milestone 10, Week 14&quot;]
         direction TB
