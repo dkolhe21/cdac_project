@@ -1,1 +1,1 @@
-white_papers/verify_srs_v2.py
+scripts/verify_srs_v2.py

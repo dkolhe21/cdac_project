@@ -12,13 +12,13 @@ echo "Starting Clean-Room Reset Protocol (WAKE_UP.sh)"
 echo "Working directory: $REPO_ROOT"
 echo "========================================================"
 
-# Step 1: Verify pd/v1/verify_patch_set.py checksum
-echo "[Step 1/4] Verifying pd/v1/verify_patch_set.py checksum..."
-VERIFIER="pd/v1/verify_patch_set.py"
+# Step 1: Verify scripts/verify_patch_set.py checksum
+echo "[Step 1/4] Verifying scripts/verify_patch_set.py checksum..."
+VERIFIER="scripts/verify_patch_set.py"
 # v7: the pin was stale (it predated the B7/B8 landing and the verifier's
 # own changes). The checksum is now read from the live file's recorded
 # value where one exists, and otherwise reported rather than guessed.
-EXPECTED_VERIFIER_MD5_FILE="pd/v1/verify_patch_set.py.md5"
+EXPECTED_VERIFIER_MD5_FILE="scripts/verify_patch_set.py.md5"
 
 if [ ! -f "$VERIFIER" ]; then
     echo "ERROR: Verifier script '$VERIFIER' not found!" >&2

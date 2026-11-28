@@ -22,7 +22,7 @@
 | 7 | Directed Upgrade-Race Test Suite | `test_f_concurrent_upgrade_abort` and `test_f_concurrent_upgrade_decline_reissue` confirm immediate abort on same-line INV with INVACK on VC2, non-blocking completion, exactly one holder in M | M2 | ORIGINAL_REQUEST §R3 |
 | 8 | Spec-Derived Mutation Matrix | 8 spec-derived mutations with negative controls Mut-05, Mut-06, Mut-07, and Mut-08 killing mutants while unmutated baseline passes | M2 | ORIGINAL_REQUEST §R3 |
 | 9 | Lockstep Documentation (Rows AH, AI, AJ) | Synchronize `docs/` and `tb_acceptance/docs/` (`01_DECISION_LOG.md`) to copy rows AH, AI, AJ verbatim from `FINAL_whitepaper_v3.0.md` §13 | M3 | ORIGINAL_REQUEST §R4 |
-| 10 | Package Gate Verifier (134 Checks) | Canonical package verifier `pd/v1/verify_patch_set.py` passes all 134 structural and architectural checks cleanly | M3 | ORIGINAL_REQUEST §R4 |
+| 10 | Package Gate Verifier (134 Checks) | Canonical package verifier `scripts/verify_patch_set.py` passes all 134 structural and architectural checks cleanly | M3 | ORIGINAL_REQUEST §R4 |
 | 11 | Final Verification Report (Tasks 0-8) | Comprehensive verification report answering all questions and delivering trace/test evidence for Tasks 0 through 8 | M4 | ORIGINAL_REQUEST §R4 |
 
 ## Milestones

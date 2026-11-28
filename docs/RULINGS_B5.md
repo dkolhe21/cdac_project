@@ -16,7 +16,7 @@
 > | old A2.2 wording removed | **still present** — `white_papers/final/FINAL_whitepaper_v3.0.md:631` still reads `DIR_S ⟹ sharers equal the S-mask exactly (no stale bits)` |
 > | §12 gains item 12 ("Lemma L1 versus a mid-miss tile") | **not present** — §12 (*Open Items Still Requiring Decision*, line 1124) ends at item 11 (line 1138); `grep mid-miss` → 0 matches |
 > | §13 ledger gains row **AG** | **not present** — `grep 'AG \|'` → 0 matches |
-> | package gate extended to **131/131** with new check **J3** | **not present** — `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` exits 0 and reports **130**; J1 and J2 both print `verifier runs 130`; there is no J3 |
+> | package gate extended to **131/131** with new check **J3** | **not present** — `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` exits 0 and reports **130**; J1 and J2 both print `verifier runs 130`; there is no J3 |
 > | docs suite gate unaffected | **47 PASS / 0 FAIL** — `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv`, exit 0, before adding this file |
 >
 > Every file named in §4 exists (`SPEC_SHEET.md`, `HLD_LLD_4x4_architecture.md`,

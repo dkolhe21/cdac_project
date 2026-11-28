@@ -27,9 +27,9 @@ Format: Symptom → Reproduction → Root cause → Resolution → Verification 
 
 **Root cause**: Copy-paste error when writing the Appendix C table; I3 was used where I2 was intended.
 
-**Resolution**: Changed "invariant I3" to "invariant I2" in that row only. Re-rendered `diagrams_rendered.html` via `pd/v1/build_diagrams_html.py`. Updated `cross-check-snapshot/`.
+**Resolution**: Changed "invariant I3" to "invariant I2" in that row only. Re-rendered `diagrams_rendered.html` via `scripts/build_diagrams_html.py`. Updated `cross-check-snapshot/`.
 
-**Verification**: `grep "43:42" white_papers/final/FINAL_whitepaper_v3.0.md` now reads "formal invariant I2"; package gate (live, post-B5) `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → RESULT: PASS 131/131, exit 0.
+**Verification**: `grep "43:42" white_papers/final/FINAL_whitepaper_v3.0.md` now reads "formal invariant I2"; package gate (live, post-B5) `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` → RESULT: PASS 131/131, exit 0.
 
 **Lesson**: Invariant cross-references must be checked against the numbered list in §5.3 at the time of writing, not assumed from memory.
 

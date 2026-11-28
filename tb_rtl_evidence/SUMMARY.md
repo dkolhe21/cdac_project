@@ -65,7 +65,7 @@ tb_rtl_evidence/
 
 | Gate | Command | Result |
 |---|---|---|
-| Spec | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | **131/131 PASS** (exit 0) |
+| Spec | `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` | **131/131 PASS** (exit 0) |
 | Docs | `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv` | **47/47 PASS** (exit 0) |
 | Icarus 13 | `iverilog -g2012 -Wall` | exit 0 (21 "sorry" = Icarus limitation) |
 | Verilator 5.054 | `verilator --lint-only -Wall -Wno-fatal` | exit 0 (4 real UNUSEDSIGNAL, 42 UNUSEDPARAM style) |
@@ -87,7 +87,7 @@ The frozen-RTL table above is history. Current gates on the landed tree (ruling 
 
 | Gate | Command | Result |
 |---|---|---|
-| Spec package | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | **134/134 PASS** (exit 0, Step 0 `apply_b78_repo.py`: B7 steps "already", B8 steps applied, J6 added) |
+| Spec package | `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` | **134/134 PASS** (exit 0, Step 0 `apply_b78_repo.py`: B7 steps "already", B8 steps applied, J6 added) |
 | Docs | `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv` | **47/47 PASS** (exit 0) |
 | Coding rules (canonical 25-rule set) | `python3 lint/check_rules.py --verilator` | **48/48 PASS** (exit 0) — 25 rules x 2 modules |
 | Smoke ALU | `cd tb/smoke && make MODULE=test_smoke TOPLEVEL=tb_smoke` | **PASS** (1/1) |

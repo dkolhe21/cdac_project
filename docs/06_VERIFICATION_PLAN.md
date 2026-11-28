@@ -25,7 +25,7 @@ A module is green only when **all four** hold:
 1. RTL lint clean — `python3 lint/check_rules.py --verilator` passes the **canonical 25-rule set** in `lint/coding_rules.json` (CR01: zero `%Error`; CR02: only the recorded style warning classes `UNUSEDSIGNAL`/`UNUSEDPARAM` fire; CR03–CR25: the source-level synthesis/style rules); unit testbench pass.
 2. 42 bound SVA assertions pass BMC K=64 in SymbiYosys — **anti-vacuity**: the run must report its live assertion count in the elaborated design (post-B6 slice: 36 `$check` cells = 32 asserts + 4 assumes) and the depth reached; a green log without both numbers is not a pass.
 3. TLM reference model shadow comparison: zero mismatches across directed tests.
-4. `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **134/134, exit 0**.
+4. `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` → **134/134, exit 0**.
 
 Directed test suites per module:
 | Module | Tests | Covers |

@@ -26,7 +26,7 @@
 | `WORK_BREAKDOWN_16.md` | 14 work packages, effort ranges, assertion mapping |
 | `SLICE_16_1.md` | Implementation slice for §16.1 (L1 FSM + dir_ctrl co-landing) |
 
-**Canonical gate**: `pd/v1/verify_patch_set.py` (md5 `4c4370f50882e82399b65076147bf112`) — runs against `white_papers/final/`
+**Canonical gate**: `scripts/verify_patch_set.py` (md5 `9cc66afaaff98d06f070bd847ee1c46e`) — runs against `white_papers/final/`
 
 ---
 
@@ -90,7 +90,7 @@ status: dtr_busy    (one transaction per bank, N4/N5)
 
 | Gate | Command | Result |
 |------|---------|--------|
-| **Spec gate** | `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` | ✅ **134/134 PASS** |
+| **Spec gate** | `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` | ✅ **134/134 PASS** |
 | **Doc gate** | `python3 ~/.skills/hw-design-docs/scripts/check_docs.py --docs docs --wp white_papers/final/FINAL_whitepaper_v3.0.md --build-order docs/BUILD_ORDER.csv` | ✅ **47/47 PASS** |
 | **Doc gate (no build-order)** | Same without `--build-order` | ✅ **COUNT DRIFT — exits 1** (guard works) |
 
@@ -153,7 +153,7 @@ A module is green only when **all four** hold:
 1. **RTL lint clean** — `python3 lint/check_rules.py --verilator` (canonical 25-rule set in `lint/coding_rules.json`); unit testbench pass
 2. **42 bound SVA assertions** pass BMC K=64 in SymbiYosys
 3. **TLM reference model shadow** comparison: zero mismatches across directed tests
-4. **Spec gate**: `python3 pd/v1/verify_patch_set.py --dir white_papers/final --build-script pd/v1/build_diagrams_html.py` → **134/134, exit 0**
+4. **Spec gate**: `python3 scripts/verify_patch_set.py --dir white_papers/final --build-script scripts/build_diagrams_html.py` → **134/134, exit 0**
 
 ---
 
@@ -225,7 +225,7 @@ verilator --version            # → Verilator 5.x (for lint only)
 ```
 /mnt/Code/visualstudio/Design-arch_multi-core/
 ├── white_papers/final/          # Canonical spec (gate runs here)
-├── pd/v1/                       # Verification gate + build scripts
+├── scripts/                       # Verification gate + build scripts
 ├── rtl/
 │   ├── pkg/tile_pkg.sv          # Single source of truth
 │   ├── l2/l2_bank.sv            # Stub (R3 frozen)
@@ -251,8 +251,8 @@ verilator --version            # → Verilator 5.x (for lint only)
 ```bash
 # Spec gate (must be 134/134)
 cd /mnt/Code/visualstudio/Design-arch_multi-core
-python3 pd/v1/verify_patch_set.py --dir white_papers/final \
-  --build-script pd/v1/build_diagrams_html.py
+python3 scripts/verify_patch_set.py --dir white_papers/final \
+  --build-script scripts/build_diagrams_html.py
 
 # Doc gate (must be 47/47 with build-order)
 python3 ~/.skills/hw-design-docs/scripts/check_docs.py \
